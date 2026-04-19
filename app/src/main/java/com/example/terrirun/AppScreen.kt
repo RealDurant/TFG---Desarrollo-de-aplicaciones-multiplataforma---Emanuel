@@ -1,0 +1,8 @@
+package com.example.terrirun
+
+
+enum class AppScreen {
+    MAP,
+    RANKING,
+    PROFILE
+}

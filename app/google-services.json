@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "914855338177",
+    "project_id": "terrirun-4262c",
+    "storage_bucket": "terrirun-4262c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:914855338177:android:1a2060a450f4450d4e3440",
+        "android_client_info": {
+          "package_name": "com.example.terrirun"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBA74ns_TJ4InSfLPkKskIWOKGgALg5FDM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
