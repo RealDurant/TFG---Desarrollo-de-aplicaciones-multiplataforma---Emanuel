@@ -121,3 +121,40 @@ fun TerritoryDto.toDomain(): Territory {
         control = control
     )
 }
+fun findAttackedEnemyTerritory(
+    routePoints: List<LatLng>,
+    territories: List<Territory>,
+    currentUserId: String,
+    maxDistanceMeters: Float = 200f,
+    requiredCoverage: Float = 0.4f
+): Territory? {
+    if (routePoints.isEmpty() || territories.isEmpty()) return null
+
+    val enemyTerritories = territories.filter {
+        it.ownerId != currentUserId && it.control > 0
+    }
+
+    return enemyTerritories.firstOrNull { territory ->
+        val pointsNearTerritory = routePoints.count { point ->
+            distanceInMeters(point, territory.center) <= maxDistanceMeters
+        }
+
+        val coverage = pointsNearTerritory.toFloat() / routePoints.size.toFloat()
+        coverage >= requiredCoverage
+    }
+}
+fun calculateAttackDamage(
+    elapsedTimeSeconds: Int,
+    totalDistanceMeters: Float,
+    territoryType: SettlementType
+): Int {
+    val timeFactor = elapsedTimeSeconds / 60
+    val distanceFactor = (totalDistanceMeters / 200).toInt()
+
+    val baseDamage = maxOf(1, timeFactor + distanceFactor)
+
+    return when (territoryType) {
+        SettlementType.CASTLE -> maxOf(1, baseDamage / 2)
+        SettlementType.VILLAGE -> baseDamage
+    }.coerceAtMost(25)
+}

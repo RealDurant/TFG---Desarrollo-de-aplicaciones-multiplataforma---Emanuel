@@ -14,19 +14,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun RegisterScreen(
     authManager: AuthManager,
     userRepository: UserRepository,
-    onRegisterSuccess: () -> Unit,
+    onRegisterSuccess: (String) -> Unit,
     onGoToLogin: () -> Unit
 ){
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -53,8 +61,33 @@ fun RegisterScreen(
             onValueChange = { password = it },
             label = { Text("Contraseña") },
             singleLine = true,
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                IconButton(onClick = {
+                    passwordVisible = !passwordVisible
+                }) {
+                    Icon(
+                        imageVector = if (passwordVisible)
+                            Icons.Default.VisibilityOff
+                        else
+                            Icons.Default.Visibility,
+                        contentDescription = null
+                    )
+                }
+            },
             modifier = Modifier.padding(top = 12.dp)
         )
+        Text(
+            text = "Mínimo 6 caracteres y al menos un número",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+
 
         if (errorMessage != null) {
             Text(
@@ -73,8 +106,18 @@ fun RegisterScreen(
                     return@Button
                 }
 
+                if (!email.contains("@")) {
+                    errorMessage = "Correo inválido (falta @)"
+                    return@Button
+                }
+
                 if (password.length < 6) {
-                    errorMessage = "La contraseña debe tener al menos 6 caracteres"
+                    errorMessage = "Mínimo 6 caracteres"
+                    return@Button
+                }
+
+                if (!password.any { it.isDigit() }) {
+                    errorMessage = "Debe contener al menos un número"
                     return@Button
                 }
 
@@ -90,19 +133,8 @@ fun RegisterScreen(
                             return@register
                         }
 
-                        val profile = UserProfile(
-                            uid = uid,
-                            email = email
-                        )
-
-                        userRepository.saveUserProfile(profile) { saveSuccess, saveError ->
-                            isLoading = false
-                            if (saveSuccess) {
-                                onRegisterSuccess()
-                            } else {
-                                errorMessage = saveError ?: "Usuario creado, pero no se pudo guardar el perfil"
-                            }
-                        }
+                        isLoading = false
+                        onRegisterSuccess(email)
                     } else {
                         isLoading = false
                         errorMessage = error ?: "Error al registrar usuario"

@@ -2,7 +2,11 @@ package com.example.terrirun
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -11,12 +15,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.filled.Settings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainGameScreen(
     permissionGranted: Boolean,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.MAP) }
 
@@ -31,13 +37,20 @@ fun MainGameScreen(
         AppScreen.MAP -> "TerriRun"
         AppScreen.RANKING -> "Ranking"
         AppScreen.PROFILE -> "Perfil"
+        AppScreen.SETTINGS -> "Ajustes"
+
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(title) }
+                title = { Text(title) },
+                actions = {
+                    IconButton(onClick = { currentScreen = AppScreen.SETTINGS }) {
+                        Icon(Icons.Default.Settings, contentDescription = null)
+                    }
+                }
             )
         },
         bottomBar = {
@@ -90,6 +103,11 @@ fun MainGameScreen(
                     },
                     uiState = uiState,
                     modifier = Modifier.padding(innerPadding)
+                )
+            }
+            AppScreen.SETTINGS -> {
+                SettingsScreen(
+                    onBack = { currentScreen = AppScreen.MAP }
                 )
             }
         }

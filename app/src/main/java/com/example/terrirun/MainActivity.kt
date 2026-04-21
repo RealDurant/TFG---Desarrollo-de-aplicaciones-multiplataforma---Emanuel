@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.example.terrirun.ui.theme.TerriRunTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -64,23 +65,33 @@ class MainActivity : ComponentActivity() {
 
     private fun setAppContent() {
         setContent {
-            var isLoggedIn by remember { mutableStateOf(authManager.isUserLoggedIn()) }
+            val context = this
+            val settingsManager = remember { SettingsManager(context) }
+            var isDarkMode by remember { mutableStateOf(settingsManager.isDarkMode()) }
 
-            if (isLoggedIn) {
-                MainGameScreen(
-                    permissionGranted = permissionGranted,
-                    onLogout = {
-                        isLoggedIn = false
-                    }
-                )
-            } else {
-                AuthFlowScreen(
-                    authManager = authManager,
-                    userRepository = userRepository,
-                    onAuthSuccess = {
-                        isLoggedIn = true
-                    }
-                )
+            TerriRunTheme(darkTheme = isDarkMode) {
+
+                var isLoggedIn by remember { mutableStateOf(authManager.isUserLoggedIn()) }
+
+                if (isLoggedIn) {
+                    MainGameScreen(
+                        permissionGranted = permissionGranted,
+                        onLogout = {
+                            isLoggedIn = false
+                        },
+                        onOpenSettings = {
+                            isLoggedIn = true // no cambia login
+                        }
+                    )
+                } else {
+                    AuthFlowScreen(
+                        authManager = authManager,
+                        userRepository = userRepository,
+                        onAuthSuccess = {
+                            isLoggedIn = true
+                        }
+                    )
+                }
             }
         }
     }

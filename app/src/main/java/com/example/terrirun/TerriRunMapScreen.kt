@@ -43,6 +43,17 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Castle
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Terrain
 
 @SuppressLint("MissingPermission", "UnrememberedMutableState")
 @Composable
@@ -109,12 +120,17 @@ fun TerriRunMapScreen(
             }
         }
     }
-    val capitalTerritory = getCapitalTerritory(territories)
-
+    val myTerritories = territories
+        .filter { it.ownerId == uiState.currentUserId }
+        .sortedBy { it.control }
+    val capitalTerritory = territories.firstOrNull {
+        it.ownerId == uiState.currentUserId && it.type == SettlementType.CASTLE
+    }
 
     val playerProfile = uiState.playerProfile
 
-
+    var isActivityExpanded by remember { mutableStateOf(false) }
+    var isTerritoriesExpanded by remember { mutableStateOf(false) }
 
     val territoryRepository = remember { TerritoryRepository() }
 
@@ -270,198 +286,210 @@ fun TerriRunMapScreen(
 
         SectionCard(
             title = "Actividad",
+            icon = Icons.Default.Terrain,
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 12.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 10.dp, top = 16.dp)
+                .width(180.dp)
+                .clickable {
+                    isActivityExpanded = !isActivityExpanded
+                }
         ) {
-            Text(text = "Tiempo: ${formatTime(elapsedTimeSeconds)}")
-            Text(text = "Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km")
-            Text(text = "Refuerzo capital: $capitalReinforcementPoints")
+            if (isActivityExpanded) {
+                ActivityStatRow(
+                    icon = Icons.Default.Schedule,
+                    label = "Tiempo",
+                    value = formatTime(elapsedTimeSeconds)
+                )
+                ActivityStatRow(
+                    icon = Icons.Default.LocationOn,
+                    label = "Distancia",
+                    value = "${"%.2f".format(totalDistanceMeters / 1000)} km"
+                )
+                ActivityStatRow(
+                    icon = Icons.Default.Shield,
+                    label = "Refuerzo capital",
+                    value = capitalReinforcementPoints.toString()
+                )
+            } else {
+                Text(text = "Pulsa para ver detalles")
+            }
         }
 
-        Button(
+        PrimaryFloatingButton(
+            text = if (isTracking) "Detener actividad" else "Iniciar actividad",
+            icon = Icons.Default.PlayArrow,
             onClick = {
                 if (isTracking) {
                     isTracking = false
 
-                    if (routePoints.size >= 10 && totalDistanceMeters >= 300f && elapsedTimeSeconds >= 60) {
-                        val startPoint = routePoints.first()
-                        val endPoint = routePoints.last()
-                        val distanceToStart = distanceInMeters(startPoint, endPoint)
+                    val startPoint = routePoints.firstOrNull()
+                    val endPoint = routePoints.lastOrNull()
 
-                        if (distanceToStart <= 80f) {
-                            val territoryPoints = routePoints.toList()
-                            val territoryCenter = calculateCenter(territoryPoints)
+                    val distanceToStart = if (startPoint != null && endPoint != null) {
+                        distanceInMeters(startPoint, endPoint)
+                    } else 9999f
 
-                            val settlementType = if (territories.isEmpty()) {
-                                SettlementType.CASTLE
-                            } else {
-                                SettlementType.VILLAGE
-                            }
-                            val existingNames = territories.map { it.name }
+                    val patrolledTerritory = findPatrolledTerritory(routePoints, territories)
+                    val attackedTerritory = findAttackedEnemyTerritory(
+                        routePoints = routePoints,
+                        territories = territories,
+                        currentUserId = uiState.currentUserId
+                    )
 
-                            val territoryName = if (settlementType == SettlementType.CASTLE) {
-                                generateCapitalName()
-                            } else {
-                                generateVillageName(existingNames)
-                            }
+                    val meetsActivityRequirements =
+                        totalDistanceMeters >= 200f && elapsedTimeSeconds >= 60
 
-                            val uid = authManager.getCurrentUserId() ?: return@Button
+                    val canCreateTerritory =
+                        routePoints.size >= 10 &&
+                                totalDistanceMeters >= 300f &&
+                                elapsedTimeSeconds >= 60 &&
+                                distanceToStart <= 80f
 
-                            val newTerritory = Territory(
-                                id = nextTerritoryId,
-                                ownerId = uid,
-                                name = territoryName,
-                                points = territoryPoints,
-                                center = territoryCenter,
-                                type = settlementType,
-                                control = 20
-                            )
+                    if (canCreateTerritory) {
+                        val territoryPoints = routePoints.toList()
+                        val territoryCenter = calculateCenter(territoryPoints)
 
-                            territories.add(newTerritory)
-
-                            if (uid != null) {
-                                territoryRepository.saveTerritory(
-                                    newTerritory.toDto()
-                                ) { success, error ->
-                                    if (!success) {
-                                        println("Error guardando territorio: $error")
-                                    } else {
-                                        onRefreshData()
-                                    }
-                                }
-                            }
-
-                            nextTerritoryId++
-
-                            val settlementName = when (settlementType) {
-                                SettlementType.CASTLE -> "Capital"
-                                SettlementType.VILLAGE -> "Poblado"
-                            }
-
-                            summaryTitle = "Actividad finalizada"
-                            summaryMessage = """
-                            Has completado un circuito válido.
-                            
-                            Territorio creado: Sí
-                            Nombre: $territoryName
-                            Tipo de asentamiento: $settlementName
-                            Control inicial: 20%
-                            Tiempo: ${formatTime(elapsedTimeSeconds)}
-                            Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                            """.trimIndent()
-                            showSummaryDialog = true
+                        val settlementType = if (territories.none { it.ownerId == uiState.currentUserId }) {
+                            SettlementType.CASTLE
                         } else {
+                            SettlementType.VILLAGE
+                        }
 
-                            val patrolledTerritory = findPatrolledTerritory(routePoints, territories)
+                        val existingNames = territories.map { it.name }
 
-                            if (patrolledTerritory != null && totalDistanceMeters >= 200f && elapsedTimeSeconds >= 60) {
-                                val updatedControl = minOf(patrolledTerritory.control + 5, 100)
+                        val territoryName = if (settlementType == SettlementType.CASTLE) {
+                            generateCapitalName()
+                        } else {
+                            generateVillageName(existingNames)
+                        }
 
-                                territories.replaceAll { territory ->
-                                    if (territory.id == patrolledTerritory.id) {
-                                        territory.copy(control = updatedControl)
-                                    } else {
-                                        territory
-                                    }
-                                }
+                        val uid = authManager.getCurrentUserId() ?: return@PrimaryFloatingButton
 
-                                if (selectedTerritory?.id == patrolledTerritory.id) {
-                                    selectedTerritory = patrolledTerritory.copy(control = updatedControl)
-                                }
-                                syncTerritoryControl(patrolledTerritory.ownerId, patrolledTerritory.id, updatedControl)
-                                summaryTitle = "Actividad finalizada"
-                                summaryMessage = """
-                                No se ha cerrado el circuito, pero has patrullado un territorio existente.
-                                
-                                Territorio patrullado: ${patrolledTerritory.name}
-                                Control actual: $updatedControl%
-                                Tiempo: ${formatTime(elapsedTimeSeconds)}
-                                Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                                """.trimIndent()
-                                showSummaryDialog = true
+                        val newTerritory = Territory(
+                            id = nextTerritoryId,
+                            ownerId = uid,
+                            name = territoryName,
+                            points = territoryPoints,
+                            center = territoryCenter,
+                            type = settlementType,
+                            control = 20
+                        )
+
+                        territories.add(newTerritory)
+
+                        territoryRepository.saveTerritory(
+                            newTerritory.toDto()
+                        ) { success, error ->
+                            if (!success) {
+                                println("Error guardando territorio: $error")
                             } else {
-                                val activityNearCapital = isActivityCoveringCapital(routePoints, capitalTerritory)
-                                val reinforcementGained = if (activityNearCapital) {
-                                    (totalDistanceMeters / 100).toInt()
-                                } else {
-                                    0
-                                }
-
-                                capitalReinforcementPoints += reinforcementGained
-
-                                summaryTitle = "Actividad finalizada"
-                                summaryMessage = """
-                                No se ha cerrado el circuito.
-                                
-                                Distancia al punto inicial: ${distanceToStart.toInt()} m
-                                Tiempo: ${formatTime(elapsedTimeSeconds)}
-                                Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                                
-                                ${if (activityNearCapital)
-                                    "Refuerzo generado para la capital: +$reinforcementGained\nRefuerzo disponible: $capitalReinforcementPoints"
-                                else
-                                    "La actividad no se ha realizado cerca de la capital, por lo que no ha generado refuerzo."}
-                                """.trimIndent()
-                                showSummaryDialog = true
+                                onRefreshData()
                             }
                         }
+
+                        nextTerritoryId++
+
+                        val settlementName = when (settlementType) {
+                            SettlementType.CASTLE -> "Capital"
+                            SettlementType.VILLAGE -> "Poblado"
+                        }
+
+                        summaryTitle = "Actividad finalizada"
+                        summaryMessage = """
+                    Has completado un circuito válido.
+                    
+                    Territorio creado: Sí
+                    Nombre: $territoryName
+                    Tipo de asentamiento: $settlementName
+                    Control inicial: 20%
+                    Tiempo: ${formatTime(elapsedTimeSeconds)}
+                    Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
+                """.trimIndent()
+
+                    } else if (patrolledTerritory != null &&
+                        patrolledTerritory.ownerId == uiState.currentUserId &&
+                        meetsActivityRequirements
+                    ) {
+                        val updatedControl = minOf(patrolledTerritory.control + 5, 100)
+
+                        territories.replaceAll {
+                            if (it.id == patrolledTerritory.id && it.ownerId == patrolledTerritory.ownerId) {
+                                it.copy(control = updatedControl)
+                            } else it
+                        }
+
+                        syncTerritoryControl(
+                            patrolledTerritory.ownerId,
+                            patrolledTerritory.id,
+                            updatedControl
+                        )
+
+                        summaryTitle = "Actividad finalizada"
+                        summaryMessage = """
+                    Has patrullado un territorio existente.
+                    
+                    Territorio: ${patrolledTerritory.name}
+                    Control actual: $updatedControl%
+                """.trimIndent()
+
+                    } else if (attackedTerritory != null && meetsActivityRequirements) {
+                        val attackDamage = calculateAttackDamage(
+                            elapsedTimeSeconds,
+                            totalDistanceMeters,
+                            attackedTerritory.type
+                        )
+
+                        val newControl = maxOf(attackedTerritory.control - attackDamage, 0)
+
+                        territories.replaceAll {
+                            if (it.id == attackedTerritory.id && it.ownerId == attackedTerritory.ownerId) {
+                                it.copy(control = newControl)
+                            } else it
+                        }
+
+                        syncTerritoryControl(
+                            attackedTerritory.ownerId,
+                            attackedTerritory.id,
+                            newControl
+                        )
+
+                        summaryTitle = "Actividad finalizada"
+                        summaryMessage = """
+                    Has atacado un territorio enemigo.
+                    
+                    Territorio: ${attackedTerritory.name}
+                    Daño: -$attackDamage
+                    Control restante: $newControl%
+                """.trimIndent()
+
                     } else {
+                        val activityNearCapital =
+                            isActivityCoveringCapital(routePoints, capitalTerritory)
 
-                        val patrolledTerritory = findPatrolledTerritory(routePoints, territories)
+                        val reinforcementGained = if (activityNearCapital) {
+                            (totalDistanceMeters / 100).toInt()
+                        } else 0
 
-                        if (patrolledTerritory != null && totalDistanceMeters >= 200f && elapsedTimeSeconds >= 60) {
-                            val updatedControl = minOf(patrolledTerritory.control + 5, 100)
+                        capitalReinforcementPoints += reinforcementGained
 
-                            territories.replaceAll { territory ->
-                                if (territory.id == patrolledTerritory.id) {
-                                    territory.copy(control = updatedControl)
-                                } else {
-                                    territory
-                                }
-
-                            }
-
-                            if (selectedTerritory?.id == patrolledTerritory.id) {
-                                selectedTerritory = patrolledTerritory.copy(control = updatedControl)
-                            }
-                            syncTerritoryControl(patrolledTerritory.ownerId, patrolledTerritory.id, updatedControl)
-
-                            summaryTitle = "Actividad finalizada"
-                            summaryMessage = """
-                            Has patrullado un territorio existente.
-                            
-                            Territorio patrullado: ${patrolledTerritory.name}
-                            Control actual: $updatedControl%
-                            Tiempo: ${formatTime(elapsedTimeSeconds)}
-                            Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                            """.trimIndent()
-                            showSummaryDialog = true
-                        } else {
-                            val activityNearCapital = isActivityCoveringCapital(routePoints, capitalTerritory)
-                            val reinforcementGained = if (activityNearCapital) {
-                                (totalDistanceMeters / 100).toInt()
-                            } else {
-                                0
-                            }
-
-                            capitalReinforcementPoints += reinforcementGained
-
-                            summaryTitle = "Actividad finalizada"
-                            summaryMessage = """
-                            La actividad no cumple los requisitos para crear territorio ni patrullar una zona.
-                            
-                            Tiempo: ${formatTime(elapsedTimeSeconds)}
-                            Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                            
-                            ${if (activityNearCapital)
-                                "Refuerzo generado para la capital: +$reinforcementGained\nRefuerzo disponible: $capitalReinforcementPoints"
+                        summaryTitle = "Actividad finalizada"
+                        summaryMessage = """
+                    Actividad completada.
+                    
+                    Tiempo: ${formatTime(elapsedTimeSeconds)}
+                    Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
+                    
+                    ${
+                            if (activityNearCapital)
+                                "Refuerzo generado: +$reinforcementGained"
                             else
-                                "La actividad no ha transcurrido lo suficiente dentro o alrededor de la capital, por lo que no ha generado refuerzo."}
-                            """.trimIndent()
-                            showSummaryDialog = true
+                                "No se generó refuerzo"
                         }
+                """.trimIndent()
                     }
+
+                    showSummaryDialog = true
 
                 } else {
                     routePoints.clear()
@@ -469,13 +497,12 @@ fun TerriRunMapScreen(
                     totalDistanceMeters = 0f
                     isTracking = true
                 }
-            }, modifier = Modifier
+            },
+            modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-                .height(60.dp)
-        ) {
-            Text(if (isTracking) "Detener actividad" else "Iniciar actividad")
-        }
+                .padding(bottom = 28.dp)
+                .height(62.dp)
+        )
         if (showSummaryDialog) {
             AlertDialog(
                 onDismissRequest = { showSummaryDialog = false },
@@ -499,7 +526,6 @@ fun TerriRunMapScreen(
             val isNeutralized = territory.control == 0
             val isCapital = territory.type == SettlementType.CASTLE
 
-            val canAttack = !isMine && !isNeutralized
             val canClaim = isNeutralized
             val canRemoteReinforce = isMine &&
                     !isCapital &&
@@ -541,32 +567,6 @@ fun TerriRunMapScreen(
 
 
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    Button(
-                        onClick = {
-                            if (canAttack) {
-                                val attackDamage = when (territory.type) {
-                                    SettlementType.CASTLE -> 5
-                                    SettlementType.VILLAGE -> 10
-                                }
-
-                                val newControl = maxOf(territory.control - attackDamage, 0)
-
-                                territories.replaceAll { current ->
-                                    if (current.ownerId == territory.ownerId && current.id == territory.id) {
-                                        current.copy(control = newControl)
-                                    } else {
-                                        current
-                                    }
-                                }
-
-                                selectedTerritory = territory.copy(control = newControl)
-                                syncTerritoryControl(territory.ownerId, territory.id, newControl)
-                            }
-                        },
-                        enabled = canAttack
-                    ) {
-                        Text("Atacar")
-                    }
 
                     Button(
                         onClick = {
@@ -643,94 +643,79 @@ fun TerriRunMapScreen(
                 }
             }
         }
-        Button(
-            onClick = {
-                territories.replaceAll { territory ->
-                    if (territory.control > 0) {
-                        val decayAmount = when (territory.type) {
-                            SettlementType.CASTLE -> 2
-                            SettlementType.VILLAGE -> 5
-                        }
 
-                        val newControl = maxOf(territory.control - decayAmount, 0)
-                        syncTerritoryControl(territory.ownerId, territory.id, newControl)
-                        territory.copy(control = newControl)
-                    } else {
-                        territory
-                    }
-                }
-
-                if (selectedTerritory != null) {
-                    val updated = territories.find { it.id == selectedTerritory!!.id }
-                    selectedTerritory = updated
-                }
-            },
+        SectionCard(
+            title = "Mis territorios",
+            icon = Icons.Default.Castle,
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
+                .align(Alignment.TopEnd)
+                .padding(end = 10.dp, top = 16.dp)
+                .width(190.dp)
+                .clickable {
+                    isTerritoriesExpanded = !isTerritoriesExpanded
+                }
         ) {
-            Text("Pasar tiempo")
-        }
+            Text(
+                text = if (isTerritoriesExpanded) {
+                    "Ocultar territorios"
+                } else {
+                    "Pulsa para ver territorios"
+                }
+            )
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-                .background(
-                    color = Color.White.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(12.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Text(text = "Territorios del reino")
-
-            if (territories.isEmpty()) {
-                Text(text = "Aún no has conquistado territorios.")
-            } else {
-                territories.sortedBy { it.control }.forEach { territory ->
-                    val territoryType = when (territory.type) {
-                        SettlementType.CASTLE -> "Capital"
-                        SettlementType.VILLAGE -> "Poblado"
-                    }
-
-                    val territoryStatus = when {
-                        territory.control == 0 -> "Neutralizado"
-                        territory.control in 1..20 -> "Muy débil"
-                        territory.control in 21..79 -> "En consolidación"
-                        territory.control in 80..100 -> "Estable"
-                        else -> "Desconocido"
-                    }
-
+            if (isTerritoriesExpanded) {
+                if (myTerritories.isEmpty()) {
+                    Text(
+                        text = "Aún no has conquistado territorios.",
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                } else {
                     Column(
                         modifier = Modifier
                             .padding(top = 8.dp)
-                            .background(
-                                color = Color(0xFFF5F5F5),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable {
-                                selectedTerritory = territory
-                                cameraPositionState.position =
-                                    CameraPosition.fromLatLngZoom(territory.center, 17f)
-                            }
-                            .padding(8.dp)
+                            .heightIn(max = 220.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Text(
-                            text = if (territory.type == SettlementType.CASTLE) {
-                                "⭐ ${territory.name}"
-                            } else {
-                                territory.name
+                        myTerritories.forEach { territory ->
+                            val territoryType = when (territory.type) {
+                                SettlementType.CASTLE -> "Capital"
+                                SettlementType.VILLAGE -> "Poblado"
                             }
-                        )
-                        Text(text = "Tipo: $territoryType")
-                        Text(text = "Control: ${territory.control}%")
-                        Text(text = "Estado: $territoryStatus")
+
+                            val territoryStatus = when {
+                                territory.control == 0 -> "Neutralizado"
+                                territory.control in 1..20 -> "Muy débil"
+                                territory.control in 21..79 -> "En consolidación"
+                                territory.control in 80..100 -> "Estable"
+                                else -> "Desconocido"
+                            }
+
+                            TerritoryMiniCard(
+                                title = if (territory.type == SettlementType.CASTLE) {
+                                    "⭐ ${territory.name}"
+                                } else {
+                                    territory.name
+                                },
+                                subtitle = territoryType,
+                                control = territory.control,
+                                status = territoryStatus,
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .clickable {
+                                        selectedTerritory = territory
+                                        cameraPositionState.position =
+                                            CameraPosition.fromLatLngZoom(territory.center, 17f)
+                                    }
+                            )
+                        }
                     }
                 }
             }
         }
-        Button(
+        SecondaryFloatingButton(
+            text = "Ir a la capital",
+            icon = Icons.Default.Castle,
+            enabled = capitalTerritory != null,
             onClick = {
                 capitalTerritory?.let {
                     cameraPositionState.position =
@@ -738,13 +723,10 @@ fun TerriRunMapScreen(
                     selectedTerritory = it
                 }
             },
-            enabled = capitalTerritory != null,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 90.dp)
-        ) {
-            Text("Ir a la capital")
-        }
+                .padding(bottom = 95.dp)
+        )
 
 
     }
