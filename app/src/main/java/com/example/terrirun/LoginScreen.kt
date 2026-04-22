@@ -4,15 +4,24 @@ package com.example.terrirun
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -23,8 +32,10 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -33,27 +44,58 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
         Text(
             text = "Iniciar sesión",
             style = MaterialTheme.typography.headlineMedium
         )
 
+        // EMAIL
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                errorMessage = null
+            },
             label = { Text("Correo electrónico") },
             singleLine = true,
-            modifier = Modifier.padding(top = 16.dp)
+            modifier = Modifier
+                .padding(top = 20.dp)
+                .fillMaxWidth()
         )
 
+        // PASSWORD
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = {
+                password = it
+                errorMessage = null
+            },
             label = { Text("Contraseña") },
             singleLine = true,
-            modifier = Modifier.padding(top = 12.dp)
+            visualTransformation = if (passwordVisible)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = {
+                    passwordVisible = !passwordVisible
+                }) {
+                    Icon(
+                        imageVector = if (passwordVisible)
+                            Icons.Default.VisibilityOff
+                        else
+                            Icons.Default.Visibility,
+                        contentDescription = null
+                    )
+                }
+            },
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .fillMaxWidth()
         )
 
+        // ERROR
         if (errorMessage != null) {
             Text(
                 text = errorMessage!!,
@@ -62,6 +104,7 @@ fun LoginScreen(
             )
         }
 
+        // BOTÓN LOGIN
         Button(
             onClick = {
                 errorMessage = null
@@ -75,6 +118,7 @@ fun LoginScreen(
 
                 authManager.login(email, password) { success, error ->
                     isLoading = false
+
                     if (success) {
                         onLoginSuccess()
                     } else {
@@ -82,18 +126,22 @@ fun LoginScreen(
                     }
                 }
             },
-            modifier = Modifier.padding(top = 20.dp)
+            modifier = Modifier
+                .padding(top = 20.dp)
+                .fillMaxWidth()
         ) {
             Text("Entrar")
         }
 
-        Button(
+        // IR A REGISTRO
+        TextButton(
             onClick = onGoToRegister,
             modifier = Modifier.padding(top = 12.dp)
         ) {
-            Text("Ir a registro")
+            Text("¿No tienes cuenta? Regístrate")
         }
 
+        // LOADING
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.padding(top = 16.dp)

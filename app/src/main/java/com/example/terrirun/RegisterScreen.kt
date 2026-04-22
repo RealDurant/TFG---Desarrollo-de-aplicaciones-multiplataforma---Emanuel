@@ -1,27 +1,15 @@
 package com.example.terrirun
 
-
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun RegisterScreen(
@@ -29,10 +17,14 @@ fun RegisterScreen(
     userRepository: UserRepository,
     onRegisterSuccess: (String) -> Unit,
     onGoToLogin: () -> Unit
-){
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    var generalError by remember { mutableStateOf<String?>(null) }
+
     var isLoading by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -43,29 +35,51 @@ fun RegisterScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
         Text(
-            text = "Registro",
+            text = "Crear cuenta",
             style = MaterialTheme.typography.headlineMedium
         )
 
+        // EMAIL
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                emailError = null
+                generalError = null
+            },
             label = { Text("Correo electrónico") },
+            isError = emailError != null,
             singleLine = true,
-            modifier = Modifier.padding(top = 16.dp)
+            modifier = Modifier
+                .padding(top = 20.dp)
+                .fillMaxWidth()
         )
 
+        if (emailError != null) {
+            Text(
+                text = emailError!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        // PASSWORD
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            singleLine = true,
-            visualTransformation = if (passwordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
+            onValueChange = {
+                password = it
+                passwordError = null
+                generalError = null
             },
+            label = { Text("Contraseña") },
+            isError = passwordError != null,
+            singleLine = true,
+            visualTransformation = if (passwordVisible)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
             trailingIcon = {
                 IconButton(onClick = {
                     passwordVisible = !passwordVisible
@@ -79,82 +93,111 @@ fun RegisterScreen(
                     )
                 }
             },
-            modifier = Modifier.padding(top = 12.dp)
-        )
-        Text(
-            text = "Mínimo 6 caracteres y al menos un número",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .fillMaxWidth()
         )
 
-
-
-        if (errorMessage != null) {
+        if (passwordError != null) {
             Text(
-                text = errorMessage!!,
+                text = passwordError!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        } else {
+            Text(
+                text = "Mínimo 6 caracteres y al menos un número",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        // ERROR GENERAL
+        if (generalError != null) {
+            Text(
+                text = generalError!!,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 12.dp)
             )
         }
 
+        // BOTÓN REGISTRO
         Button(
             onClick = {
-                errorMessage = null
 
-                if (email.isBlank() || password.isBlank()) {
-                    errorMessage = "Completa todos los campos"
-                    return@Button
+                emailError = null
+                passwordError = null
+                generalError = null
+
+                var isValid = true
+
+                if (!isValidEmail(email)) {
+                    emailError = "Correo no válido (gmail, outlook, etc.)"
+                    isValid = false
                 }
 
-                if (!email.contains("@")) {
-                    errorMessage = "Correo inválido (falta @)"
-                    return@Button
+                if (!isValidPassword(password)) {
+                    passwordError = "Mínimo 6 caracteres y un número"
+                    isValid = false
                 }
 
-                if (password.length < 6) {
-                    errorMessage = "Mínimo 6 caracteres"
-                    return@Button
-                }
-
-                if (!password.any { it.isDigit() }) {
-                    errorMessage = "Debe contener al menos un número"
-                    return@Button
-                }
+                if (!isValid) return@Button
 
                 isLoading = true
 
                 authManager.register(email, password) { success, error ->
+
+                    isLoading = false
+
                     if (success) {
                         val uid = authManager.getCurrentUserId()
 
                         if (uid == null) {
-                            isLoading = false
-                            errorMessage = "No se pudo obtener el usuario actual"
+                            generalError = "Error interno"
                             return@register
                         }
 
-                        isLoading = false
                         onRegisterSuccess(email)
+
                     } else {
-                        isLoading = false
-                        errorMessage = error ?: "Error al registrar usuario"
+                        generalError = error ?: "Error al registrar usuario"
                     }
                 }
             },
-            modifier = Modifier.padding(top = 20.dp)
+            modifier = Modifier
+                .padding(top = 20.dp)
+                .fillMaxWidth()
         ) {
             Text("Crear cuenta")
         }
-        Button(
+
+        // BOTÓN LOGIN
+        TextButton(
             onClick = onGoToLogin,
             modifier = Modifier.padding(top = 12.dp)
         ) {
-            Text("Ir a inicio de sesión")
+            Text("¿Ya tienes cuenta? Inicia sesión")
         }
+
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.padding(top = 16.dp)
             )
         }
     }
+}
+fun isValidEmail(email: String): Boolean {
+    val validDomains = listOf(
+        "gmail.com",
+        "outlook.com",
+        "hotmail.com",
+        "yahoo.com"
+    )
+
+    val parts = email.split("@")
+    return parts.size == 2 && parts[1] in validDomains
+}
+
+fun isValidPassword(password: String): Boolean {
+    return password.length >= 6 && password.any { it.isDigit() }
 }

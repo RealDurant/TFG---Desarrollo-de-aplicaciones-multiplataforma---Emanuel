@@ -3,6 +3,9 @@ package com.example.terrirun
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -59,20 +62,19 @@ fun MainGameScreen(
                     selected = currentScreen == AppScreen.MAP,
                     onClick = { currentScreen = AppScreen.MAP },
                     label = { Text("Mapa") },
-                    icon = {}
+                    icon = { Icon(Icons.Default.Map, null) }
                 )
                 NavigationBarItem(
                     selected = currentScreen == AppScreen.RANKING,
                     onClick = { currentScreen = AppScreen.RANKING },
                     label = { Text("Ranking") },
-                    icon = {}
+                    icon = { Icon(Icons.Default.Leaderboard, null) }
                 )
                 NavigationBarItem(
                     selected = currentScreen == AppScreen.PROFILE,
                     onClick = { currentScreen = AppScreen.PROFILE },
                     label = { Text("Perfil") },
-                    icon = {}
-                )
+                    icon = { Icon(Icons.Default.Person, null) }                )
             }
         }
     ) { innerPadding ->

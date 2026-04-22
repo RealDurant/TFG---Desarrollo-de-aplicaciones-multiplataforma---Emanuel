@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit
+
 ) {
     val context = LocalContext.current
     val settingsManager = remember { SettingsManager(context) }
@@ -52,4 +53,5 @@ fun SettingsScreen(
             Text("Volver")
         }
     }
+
 }

@@ -67,9 +67,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = this
             val settingsManager = remember { SettingsManager(context) }
-            var isDarkMode by remember { mutableStateOf(settingsManager.isDarkMode()) }
+           /* var isDarkMode by remember { mutableStateOf(settingsManager.isDarkMode()) }
 
-            TerriRunTheme(darkTheme = isDarkMode) {
+            LaunchedEffect(Unit) {
+                isDarkMode = settingsManager.isDarkMode()
+            }*/
+            TerriRunTheme(/*darkTheme = isDarkMode*/) {
 
                 var isLoggedIn by remember { mutableStateOf(authManager.isUserLoggedIn()) }
 
