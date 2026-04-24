@@ -14,7 +14,7 @@ fun AuthFlowScreen(
     if (pendingEmail != null) {
         CompleteProfileScreen(
             email = pendingEmail!!,
-            onSaveProfile = { name, colorHex, avatar ->
+            onSaveProfile = { name, colorHex, avatar, imageUri ->
                 val uid = authManager.getCurrentUserId()
 
                 if (uid != null) {
@@ -24,6 +24,7 @@ fun AuthFlowScreen(
                         name = name,
                         colorHex = colorHex,
                         avatar = avatar,
+                        profileImage = imageUri,
                         reinforcementPoints = 0
                     )
 

@@ -6,6 +6,7 @@ data class UserProfile(
     val name: String = "Jugador 1",
     val colorHex: String = "#34A853",
     val avatar: String = "avatar_1",
+    val profileImage: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val reinforcementPoints: Int = 0
 )

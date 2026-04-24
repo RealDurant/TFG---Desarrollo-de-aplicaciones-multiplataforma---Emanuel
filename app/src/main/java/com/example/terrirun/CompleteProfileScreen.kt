@@ -1,5 +1,8 @@
 package com.example.terrirun
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,11 +26,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Slider
+import coil.compose.AsyncImage
+
 @Composable
 fun CompleteProfileScreen(
     email: String,
-    onSaveProfile: (name: String, colorHex: String, avatar: String) -> Unit
+    onSaveProfile: (name: String, colorHex: String, avatar: String, imageUri: String) -> Unit
 ) {
     var userName by remember { mutableStateOf("") }
     var red by remember { mutableStateOf(52f) }
@@ -40,6 +46,7 @@ fun CompleteProfileScreen(
         green = green / 255f,
         blue = blue / 255f
     )
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
 
     val selectedColor = Color(
         red = (baseColor.red * brightness).coerceIn(0f, 1f),
@@ -65,6 +72,11 @@ fun CompleteProfileScreen(
         "avatar_10" to "🦣",
 
     )
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        selectedImageUri = uri
+    }
 
     Column(
         modifier = Modifier
@@ -163,6 +175,38 @@ fun CompleteProfileScreen(
             modifier = Modifier.padding(top = 16.dp)
         )
 
+        Row(
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+
+            Button(
+                onClick = { launcher.launch("image/*") }
+            ) {
+                Text("Seleccionar imagen")
+            }
+
+            if (selectedImageUri != null) {
+                AsyncImage(
+                    model = selectedImageUri,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(70.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                // Placeholder (circulito vacío)
+                Surface(
+                    modifier = Modifier
+                        .size(70.dp)
+                        .clip(CircleShape),
+                    color = Color.LightGray
+                ) {}
+            }
+        }
         val firstRowAvatars = availableAvatars.take(4)
         val secondRowAvatars = availableAvatars.drop(4)
 
@@ -230,8 +274,12 @@ fun CompleteProfileScreen(
                     0xFFFFFF and solidColor.toArgb()
                 )
 
-                onSaveProfile(userName, colorHex, selectedAvatar)
-            },
+                onSaveProfile(
+                    userName,
+                    colorHex,
+                    selectedAvatar,
+                    selectedImageUri?.toString() ?: ""
+                )            },
             modifier = Modifier.padding(top = 20.dp)
         ) {
             Text("Guardar perfil")

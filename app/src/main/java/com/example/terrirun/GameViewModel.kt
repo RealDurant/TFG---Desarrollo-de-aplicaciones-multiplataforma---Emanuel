@@ -23,7 +23,9 @@ class GameViewModel : ViewModel() {
             if (profile != null) {
                 val playerProfile = PlayerProfile(
                     name = profile.name,
-                    territoryColor = hexToComposeColor(profile.colorHex)
+                    territoryColor = hexToComposeColor(profile.colorHex),
+                    avatar = profile.avatar,
+                    profileImage = profile.profileImage
                 )
 
                 uiState = uiState.copy(
