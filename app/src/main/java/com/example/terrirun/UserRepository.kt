@@ -75,5 +75,16 @@ class UserRepository {
                 onResult(false, e.message)
             }
     }
+    fun updateNotifications(
+        uid: String,
+        enabled: Boolean,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        db.collection("users")
+            .document(uid)
+            .update("notificationsEnabled", enabled)
+            .addOnSuccessListener { onResult(true, null) }
+            .addOnFailureListener { onResult(false, it.message) }
+    }
 
 }

@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import coil.compose.AsyncImage
 
@@ -66,10 +69,7 @@ fun CompleteProfileScreen(
         "avatar_4" to "🐎",
         "avatar_5" to "👑",
         "avatar_6" to "🛖",
-        "avatar_7" to "🪖",
-        "avatar_8" to "🦀",
-        "avatar_9" to "🦍",
-        "avatar_10" to "🦣",
+
 
     )
     val launcher = rememberLauncherForActivityResult(
@@ -81,8 +81,8 @@ fun CompleteProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -111,7 +111,7 @@ fun CompleteProfileScreen(
         Surface(
             modifier = Modifier
                 .padding(top = 10.dp)
-                .size(72.dp)
+                .size(50.dp)
                 .clip(CircleShape),
             color = selectedColor,
             shadowElevation = 6.dp
@@ -126,8 +126,9 @@ fun CompleteProfileScreen(
             value = red,
             onValueChange = { red = it },
             valueRange = 0f..255f,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)        )
 
         Text(text = "Verde: ${green.toInt()}")
 
@@ -135,8 +136,9 @@ fun CompleteProfileScreen(
             value = green,
             onValueChange = { green = it },
             valueRange = 0f..255f,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)        )
 
         Text(text = "Azul: ${blue.toInt()}")
 
@@ -144,8 +146,9 @@ fun CompleteProfileScreen(
             value = blue,
             onValueChange = { blue = it },
             valueRange = 0f..255f,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)        )
         Text(
             text = "Brillo: ${"%.2f".format(brightness)}",
             modifier = Modifier.padding(top = 12.dp)
@@ -155,8 +158,9 @@ fun CompleteProfileScreen(
             value = brightness,
             onValueChange = { brightness = it },
             valueRange = 0.5f..1.5f,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)        )
 
         Text(
             text = "Transparencia: ${"%.2f".format(alpha)}",
@@ -167,8 +171,9 @@ fun CompleteProfileScreen(
             value = alpha,
             onValueChange = { alpha = it },
             valueRange = 0f..1f,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)        )
 
         Text(
             text = "Avatar",
@@ -207,14 +212,16 @@ fun CompleteProfileScreen(
                 ) {}
             }
         }
-        val firstRowAvatars = availableAvatars.take(4)
-        val secondRowAvatars = availableAvatars.drop(4)
-
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            firstRowAvatars.forEach { (avatarId, emoji) ->
+        Row(
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            availableAvatars.forEach { (avatarId, emoji) ->
                 Surface(
                     modifier = Modifier
-                        .padding(end = 8.dp)
+                        .size(42.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { selectedAvatar = avatarId },
                     color = if (selectedAvatar == avatarId) {
@@ -223,31 +230,12 @@ fun CompleteProfileScreen(
                         Color(0xFFF5F5F5)
                     }
                 ) {
-                    Text(
-                        text = emoji,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-        }
-
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            secondRowAvatars.forEach { (avatarId, emoji) ->
-                Surface(
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { selectedAvatar = avatarId },
-                    color = if (selectedAvatar == avatarId) {
-                        Color(0xFFEDE7F6)
-                    } else {
-                        Color(0xFFF5F5F5)
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = emoji,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
-                ) {
-                    Text(
-                        text = emoji,
-                        modifier = Modifier.padding(12.dp)
-                    )
                 }
             }
         }

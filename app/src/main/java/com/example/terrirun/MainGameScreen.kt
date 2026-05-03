@@ -18,7 +18,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +32,13 @@ fun MainGameScreen(
 
     val gameViewModel: GameViewModel = viewModel()
     val uiState = gameViewModel.uiState
+    var showNotificationDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(uiState.playerProfile) {
+        if (uiState.playerProfile.name.isNotBlank()) {
+            showNotificationDialog = true
+        }
+    }
     LaunchedEffect(Unit) {
         gameViewModel.loadInitialData()
     }
@@ -112,6 +119,29 @@ fun MainGameScreen(
                     onBack = { currentScreen = AppScreen.MAP }
                 )
             }
+        }
+
+        if (showNotificationDialog) {
+            AlertDialog(
+                onDismissRequest = { showNotificationDialog = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showNotificationDialog = false
+                        // activar
+                    }) {
+                        Text("Sí")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showNotificationDialog = false
+                    }) {
+                        Text("No")
+                    }
+                },
+                title = { Text("Notificaciones") },
+                text = { Text("¿Deseas activar las notificaciones?") }
+            )
         }
     }
 }

@@ -8,5 +8,6 @@ data class UserProfile(
     val avatar: String = "avatar_1",
     val profileImage: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val reinforcementPoints: Int = 0
+    val reinforcementPoints: Int = 0,
+    val notificationsEnabled: Boolean = true
 )

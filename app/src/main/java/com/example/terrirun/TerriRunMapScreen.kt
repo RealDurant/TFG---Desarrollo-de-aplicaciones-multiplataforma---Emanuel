@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material.icons.filled.Whatshot
 
 @SuppressLint("MissingPermission", "UnrememberedMutableState")
 @Composable
@@ -77,6 +78,8 @@ fun TerriRunMapScreen(
     var elapsedTimeSeconds by remember { mutableStateOf(0) }
     var totalDistanceMeters by remember { mutableStateOf(0f) }
     var showSummaryDialog by remember { mutableStateOf(false) }
+    var showAttackAlert by remember { mutableStateOf(false) }
+    var previousTerritories by remember { mutableStateOf<List<Territory>>(emptyList()) }
     var summaryTitle by remember { mutableStateOf("") }
     var summaryMessage by remember { mutableStateOf("") }
     var selectedTerritory by remember { mutableStateOf<Territory?>(null) }
@@ -89,7 +92,7 @@ fun TerriRunMapScreen(
     var nextTerritoryId by remember { mutableStateOf(1) }
 
     val authManager = remember { AuthManager() }
-
+    var calories by remember { mutableStateOf(0f) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultLocation, 15f)
@@ -111,6 +114,8 @@ fun TerriRunMapScreen(
                         if (routePoints.isNotEmpty()) {
                             val lastPoint = routePoints.last()
                             totalDistanceMeters += distanceInMeters(lastPoint, newPoint)
+
+                            calories = (totalDistanceMeters / 1000f) * 70f
                         }
                         routePoints.add(newPoint)
                     }
@@ -152,6 +157,26 @@ fun TerriRunMapScreen(
         val myTerritories = territories.filter { it.ownerId == myUid }
         val maxId = myTerritories.maxOfOrNull { it.id } ?: 0
         nextTerritoryId = maxId + 1
+
+// detectar si han atacado tus territorios
+        if (previousTerritories.isNotEmpty()) {
+            territories.forEach { newTerritory ->
+
+                val old = previousTerritories.find {
+                    it.id == newTerritory.id && it.ownerId == newTerritory.ownerId
+                }
+
+                if (old != null &&
+                    newTerritory.ownerId == myUid &&
+                    newTerritory.control < old.control
+                ) {
+                    showAttackAlert = true
+                }
+            }
+        }
+
+// guardar estado nuevo
+        previousTerritories = territories.map { it.copy() }
     }
     LaunchedEffect(isTracking) {
         while (isTracking) {
@@ -310,6 +335,11 @@ fun TerriRunMapScreen(
                     icon = Icons.Default.Shield,
                     label = "Refuerzo capital",
                     value = capitalReinforcementPoints.toString()
+                )
+                ActivityStatRow(
+                    icon = Icons.Default.Whatshot,
+                    label = "Calorías",
+                    value = "${calories.toInt()} kcal"
                 )
             } else {
                 Text(text = "Pulsa para ver detalles")
@@ -495,6 +525,7 @@ fun TerriRunMapScreen(
                     routePoints.clear()
                     elapsedTimeSeconds = 0
                     totalDistanceMeters = 0f
+                    calories = 0f
                     isTracking = true
                 }
             },
@@ -727,6 +758,18 @@ fun TerriRunMapScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 95.dp)
         )
+        if (showAttackAlert) {
+            AlertDialog(
+                onDismissRequest = { showAttackAlert = false },
+                confirmButton = {
+                    TextButton(onClick = { showAttackAlert = false }) {
+                        Text("OK")
+                    }
+                },
+                title = { Text("⚔️ Ataque recibido") },
+                text = { Text("¡Han atacado uno de tus territorios!") }
+            )
+        }
 
 
     }

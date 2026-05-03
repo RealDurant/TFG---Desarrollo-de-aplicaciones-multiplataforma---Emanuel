@@ -13,5 +13,7 @@ data class GameUiState(
     val territories: List<Territory> = emptyList(),
     val ownerNames: Map<String, String> = emptyMap(),
     val ownerColors: Map<String, Color> = emptyMap(),
+    val ownerAvatars: Map<String, String> = emptyMap(),
+    val ownerImages: Map<String, String> = emptyMap(),
     val isLoading: Boolean = true
 )

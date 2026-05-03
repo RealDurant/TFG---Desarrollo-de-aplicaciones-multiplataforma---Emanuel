@@ -25,6 +25,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 @Composable
 fun ProfileScreen(
@@ -129,6 +134,27 @@ fun ProfileScreen(
                 StatCard("Poblados", villageCount.toString())
                 StatCard("Control", "$totalControl%")
             }
+        }
+        var notificationsEnabled by remember { mutableStateOf(true) }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Notificaciones")
+
+            Switch(
+                checked = notificationsEnabled,
+                onCheckedChange = {
+                    notificationsEnabled = it
+
+                    val uid = uiState.currentUserId
+                    UserRepository().updateNotifications(uid, it) { _, _ -> }
+                }
+            )
         }
 
         Button(

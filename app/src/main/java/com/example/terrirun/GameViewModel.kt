@@ -50,6 +50,8 @@ class GameViewModel : ViewModel() {
     private fun loadOwnerData(territories: List<Territory>) {
         val ownerNames = uiState.ownerNames.toMutableMap()
         val ownerColors = uiState.ownerColors.toMutableMap()
+        val ownerAvatars = uiState.ownerAvatars.toMutableMap()
+        val ownerImages = uiState.ownerImages.toMutableMap()
 
         territories.map { it.ownerId }
             .distinct()
@@ -60,10 +62,14 @@ class GameViewModel : ViewModel() {
                         if (profile != null) {
                             ownerNames[ownerId] = profile.name
                             ownerColors[ownerId] = hexToComposeColor(profile.colorHex)
+                            ownerAvatars[ownerId] = profile.avatar
+                            ownerImages[ownerId] = profile.profileImage
 
                             uiState = uiState.copy(
                                 ownerNames = ownerNames.toMap(),
-                                ownerColors = ownerColors.toMap()
+                                ownerColors = ownerColors.toMap(),
+                                ownerAvatars = ownerAvatars.toMap(),
+                                ownerImages = ownerImages.toMap()
                             )
                         }
                     }
