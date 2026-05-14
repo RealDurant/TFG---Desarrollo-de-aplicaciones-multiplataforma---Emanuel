@@ -2,6 +2,7 @@ package com.example.terrirun
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +37,8 @@ import androidx.compose.runtime.setValue
 fun ProfileScreen(
     onLogout: () -> Unit,
     uiState: GameUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    language: String
 ) {
     val userName = uiState.playerProfile.name
     val userColor = uiState.playerProfile.territoryColor
@@ -52,6 +55,19 @@ fun ProfileScreen(
     val avatar = uiState.playerProfile.avatar
     val maxControl = 1000 // ajustable
     val progress = (totalControl.toFloat() / maxControl).coerceIn(0f, 1f)
+    val notificationRepository = remember { NotificationRepository() }
+
+    var notifications by remember {
+        mutableStateOf<List<NotificationData>>(emptyList())
+    }
+
+    LaunchedEffect(Unit) {
+        notificationRepository.getNotifications(
+            uiState.currentUserId
+        ) {
+            notifications = it
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -83,33 +99,33 @@ fun ProfileScreen(
                             .clip(CircleShape),
                         color = Color.LightGray
                     ) {
-                        Text(
-                            text = when (avatar) {
-                                "avatar_1" -> "⚔️"
-                                "avatar_2" -> "🛡️"
-                                "avatar_3" -> "🏰"
-                                "avatar_4" -> "🐎"
-                                "avatar_5" -> "👑"
-                                "avatar_6" -> "🛖"
-                                "avatar_7" -> "🪖"
-                                "avatar_8" -> "🦀"
-                                "avatar_9" -> "🦍"
-                                "avatar_10" -> "🦣"
-                                else -> "👤"
-                            },
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                            style = MaterialTheme.typography.headlineMedium
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = when (avatar) {
+                                    "avatar_1" -> "⚔️"
+                                    "avatar_2" -> "🛡️"
+                                    "avatar_3" -> "🏰"
+                                    "avatar_4" -> "🐎"
+                                    "avatar_5" -> "👑"
+                                    "avatar_6" -> "🛖"
+                                    else -> "👤"
+                                },
+                                style = MaterialTheme.typography.headlineMedium
+                            )
+                        }
                     }
                 }
 
                 Column(modifier = Modifier.padding(start = 16.dp)) {
                     Text(text = userName, style = MaterialTheme.typography.headlineSmall)
-                    Text(text = "Refuerzo: $reinforcementPoints")
+                    Text(text = "${appText("reinforcement", language)}: $reinforcementPoints")
                 }
             }
             Text(
-                text = "Progreso del reino",
+                text = appText("profile_progress", language),
                 modifier = Modifier.padding(top = 12.dp)
             )
 
@@ -130,9 +146,9 @@ fun ProfileScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
 
-                StatCard("Territorios", myTerritories.size.toString())
-                StatCard("Poblados", villageCount.toString())
-                StatCard("Control", "$totalControl%")
+                StatCard(appText("territories", language), myTerritories.size.toString())
+                StatCard(appText("villages", language), villageCount.toString())
+                StatCard(appText("control", language), "$totalControl%")
             }
         }
         var notificationsEnabled by remember { mutableStateOf(true) }
@@ -144,7 +160,7 @@ fun ProfileScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Notificaciones")
+            Text(appText("notifications", language))
 
             Switch(
                 checked = notificationsEnabled,
@@ -156,12 +172,50 @@ fun ProfileScreen(
                 }
             )
         }
+        SectionCard(
+            title = "Notificaciones",
+            modifier = Modifier.padding(top = 20.dp)
+        ) {
 
+            if (notifications.isEmpty()) {
+
+                Text("No tienes notificaciones.")
+
+            } else {
+
+                notifications.take(5).forEach { notification ->
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        tonalElevation = 2.dp
+                    ) {
+
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+
+                            Text(
+                                text = notification.title,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+
+                            Text(
+                                text = notification.message,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Button(
             onClick = onLogout,
             modifier = Modifier.padding(top = 16.dp)
         ) {
-            Text("Cerrar sesión")
+            Text(appText("logout", language))
         }
     }
 }

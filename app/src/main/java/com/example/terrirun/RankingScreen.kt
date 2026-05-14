@@ -17,11 +17,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlin.String
 
 @Composable
 fun RankingScreen(
     uiState: GameUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    language: String
 ) {
     val ranking = uiState.territories
         .groupBy { it.ownerId }
@@ -49,12 +51,12 @@ fun RankingScreen(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Ranking de reinos",
+            text = appText("ranking_title", language),
             style = MaterialTheme.typography.headlineMedium
         )
 
         Text(
-            text = "Clasificación por control total y territorios conquistados",
+            text = appText("ranking_subtitle", language),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray,
             modifier = Modifier.padding(top = 4.dp)
@@ -62,10 +64,10 @@ fun RankingScreen(
 
         if (ranking.isEmpty()) {
             SectionCard(
-                title = "Sin datos",
+                title = appText("no_data", language),
                 modifier = Modifier.padding(top = 16.dp)
             ) {
-                Text("Aún no hay territorios conquistados.")
+                Text(appText("no_conquered_territories", language))
             }
             return@Column
         }
@@ -79,7 +81,7 @@ fun RankingScreen(
         }
 
         SectionCard(
-            title = "Clasificación general",
+            title = appText("general_ranking", language),
             modifier = Modifier.padding(top = 24.dp)
         ) {
             ranking.forEachIndexed { index, player ->
@@ -87,6 +89,7 @@ fun RankingScreen(
                     position = index + 1,
                     player = player,
                     isCurrentUser = player.ownerId == uiState.currentUserId,
+                    language = language,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -194,7 +197,10 @@ fun RankingRow(
     position: Int,
     player: PlayerRanking,
     isCurrentUser: Boolean,
+    language: String,
     modifier: Modifier = Modifier
+
+
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -227,7 +233,7 @@ fun RankingRow(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "${player.territoryCount} territorios",
+                    text = "${player.territoryCount} ${appText("territories", language)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -240,7 +246,7 @@ fun RankingRow(
                     color = player.color
                 )
                 Text(
-                    text = "control",
+                    text = appText("control", language),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -287,10 +293,6 @@ fun avatarToEmoji(avatar: String): String {
         "avatar_4" -> "🐎"
         "avatar_5" -> "👑"
         "avatar_6" -> "🛖"
-        "avatar_7" -> "🪖"
-        "avatar_8" -> "🦀"
-        "avatar_9" -> "🦍"
-        "avatar_10" -> "🦣"
         else -> "👤"
     }
 }

@@ -87,4 +87,26 @@ class UserRepository {
             .addOnFailureListener { onResult(false, it.message) }
     }
 
+    fun createNotification(
+        notification: GameNotification,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        db.collection("notifications")
+            .add(notification)
+            .addOnSuccessListener { onResult(true, null) }
+            .addOnFailureListener { e -> onResult(false, e.message) }
+    }
+    fun getNotifications(
+        uid: String,
+        onResult: (List<GameNotification>) -> Unit
+    ) {
+        db.collection("notifications")
+            .whereEqualTo("userId", uid)
+            .get()
+            .addOnSuccessListener { result ->
+                val list = result.map { it.toObject(GameNotification::class.java) }
+                onResult(list)
+            }
+    }
+
 }

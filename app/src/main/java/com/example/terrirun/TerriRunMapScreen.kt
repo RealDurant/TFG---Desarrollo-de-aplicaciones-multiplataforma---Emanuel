@@ -63,7 +63,8 @@ fun TerriRunMapScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     uiState: GameUiState,
-    onRefreshData: () -> Unit
+    onRefreshData: () -> Unit,
+    language: String
 ) {
 
     val context = LocalContext.current
@@ -310,7 +311,7 @@ fun TerriRunMapScreen(
         }
 
         SectionCard(
-            title = "Actividad",
+            title = appText("activity", language),
             icon = Icons.Default.Terrain,
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -323,17 +324,17 @@ fun TerriRunMapScreen(
             if (isActivityExpanded) {
                 ActivityStatRow(
                     icon = Icons.Default.Schedule,
-                    label = "Tiempo",
+                    label = appText("time", language),
                     value = formatTime(elapsedTimeSeconds)
                 )
                 ActivityStatRow(
                     icon = Icons.Default.LocationOn,
-                    label = "Distancia",
+                    label = appText("distance", language),
                     value = "${"%.2f".format(totalDistanceMeters / 1000)} km"
                 )
                 ActivityStatRow(
                     icon = Icons.Default.Shield,
-                    label = "Refuerzo capital",
+                    label = appText("capital_reinforcement", language),
                     value = capitalReinforcementPoints.toString()
                 )
                 ActivityStatRow(
@@ -342,12 +343,15 @@ fun TerriRunMapScreen(
                     value = "${calories.toInt()} kcal"
                 )
             } else {
-                Text(text = "Pulsa para ver detalles")
+                Text(text = appText("tap_details", language))
             }
         }
 
         PrimaryFloatingButton(
-            text = if (isTracking) "Detener actividad" else "Iniciar actividad",
+            text = if (isTracking)
+                appText("stop_activity", language)
+            else
+                appText("start_activity", language),
             icon = Icons.Default.PlayArrow,
             onClick = {
                 if (isTracking) {
@@ -471,6 +475,20 @@ fun TerriRunMapScreen(
                         )
 
                         val newControl = maxOf(attackedTerritory.control - attackDamage, 0)
+                        val notification = GameNotification(
+                            userId = attackedTerritory.ownerId,
+                            title = "⚔️ Ataque recibido",
+                            message = "Han atacado tu territorio ${attackedTerritory.name}"
+                        )
+
+                        userRepository.createNotification(notification) { _, _ -> }
+                        val notificationRepository = NotificationRepository()
+
+                        notificationRepository.sendNotification(
+                            userId = attackedTerritory.ownerId,
+                            title = "⚔️ Tu territorio está siendo atacado",
+                            message = "Han atacado ${attackedTerritory.name} y ha perdido $attackDamage% de control."
+                        )
 
                         territories.replaceAll {
                             if (it.id == attackedTerritory.id && it.ownerId == attackedTerritory.ownerId) {
@@ -676,7 +694,7 @@ fun TerriRunMapScreen(
         }
 
         SectionCard(
-            title = "Mis territorios",
+            title = appText("my_territories", language),
             icon = Icons.Default.Castle,
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -688,16 +706,16 @@ fun TerriRunMapScreen(
         ) {
             Text(
                 text = if (isTerritoriesExpanded) {
-                    "Ocultar territorios"
+                    appText("hide_territories", language)
                 } else {
-                    "Pulsa para ver territorios"
+                    appText("show_territories", language)
                 }
             )
 
             if (isTerritoriesExpanded) {
                 if (myTerritories.isEmpty()) {
                     Text(
-                        text = "Aún no has conquistado territorios.",
+                        appText("no_territories", language),
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 } else {
@@ -744,7 +762,7 @@ fun TerriRunMapScreen(
             }
         }
         SecondaryFloatingButton(
-            text = "Ir a la capital",
+            text = appText("go_capital", language),
             icon = Icons.Default.Castle,
             enabled = capitalTerritory != null,
             onClick = {

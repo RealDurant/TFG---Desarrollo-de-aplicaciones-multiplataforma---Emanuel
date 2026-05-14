@@ -6,11 +6,11 @@ class SettingsManager(context: Context) {
 
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    fun isDarkMode(): Boolean {
-        return prefs.getBoolean("dark_mode", false)
+    fun getLanguage(): String {
+        return prefs.getString("language", "es") ?: "es"
     }
 
-    fun setDarkMode(enabled: Boolean) {
-        prefs.edit().putBoolean("dark_mode", enabled).apply()
+    fun setLanguage(language: String) {
+        prefs.edit().putString("language", language).apply()
     }
 }

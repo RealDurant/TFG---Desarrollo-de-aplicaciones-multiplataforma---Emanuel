@@ -13,20 +13,24 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.TerriRun">
+        <!-- SPLASH -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SplashActivity"
             android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.TerriRun">
+            android:theme="@style/Theme.TerriRun.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- MAIN -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="API_KEY_OCULTA"/>
+            android:value="AIzaSyAWs3uQjm9lMRaQS1Yq4OG29iChCszQnAA"/>
     </application>
 
 </manifest>

@@ -5,5 +5,7 @@ enum class AppScreen {
     MAP,
     RANKING,
     PROFILE,
-    SETTINGS
+    SETTINGS,
+    PRIVACY,
+    NOTIFICATIONS
 }
