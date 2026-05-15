@@ -32,6 +32,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ProfileScreen(
@@ -68,6 +73,31 @@ fun ProfileScreen(
             notifications = it
         }
     }
+    val context = LocalContext.current
+
+// Para lanzar selector de imágenes
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            // Guardamos la imagen usando nuestra función de almacenamiento interno
+            val imagePath = saveProfileImageToInternalStorage(
+                context = context,
+                imageUri = uri,
+                userId = uiState.currentUserId
+            )
+
+            // Actualizamos el uiState o el repositorio según tu estructura
+            UserRepository().updateProfileImage(uiState.currentUserId, imagePath) { success, _ ->
+                if (success) {
+                    // Refresca uiState para que se vea la nueva imagen
+                }
+            }
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -91,12 +121,14 @@ fun ProfileScreen(
                         modifier = Modifier
                             .size(90.dp)
                             .clip(CircleShape)
+                            .clickable { launcher.launch("image/*") } // <-- permite cambiar imagen
                     )
                 } else {
                     Surface(
                         modifier = Modifier
                             .size(90.dp)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .clickable { launcher.launch("image/*") }, // <-- permite cambiar imagen
                         color = Color.LightGray
                     ) {
                         Box(
@@ -104,15 +136,7 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = when (avatar) {
-                                    "avatar_1" -> "⚔️"
-                                    "avatar_2" -> "🛡️"
-                                    "avatar_3" -> "🏰"
-                                    "avatar_4" -> "🐎"
-                                    "avatar_5" -> "👑"
-                                    "avatar_6" -> "🛖"
-                                    else -> "👤"
-                                },
+                                text = avatarToEmoji(avatar),
                                 style = MaterialTheme.typography.headlineMedium
                             )
                         }

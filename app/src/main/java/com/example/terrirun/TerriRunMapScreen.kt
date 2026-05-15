@@ -43,29 +43,43 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Castle
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Whatshot
+import com.google.android.gms.maps.CameraUpdateFactory
 
 @SuppressLint("MissingPermission", "UnrememberedMutableState")
 @Composable
 fun TerriRunMapScreen(
     permissionGranted: Boolean,
-    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     uiState: GameUiState,
-    onRefreshData: () -> Unit,
-    language: String
+    language: String,
+    selectedTerritoryFromRanking: Territory?,
+    onRefreshData: () -> Unit
 ) {
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(0.0,0.0), 10f)
+    }
+
+    var selectedTerritory by remember { mutableStateOf<Territory?>(null) }
+    LaunchedEffect(selectedTerritoryFromRanking) {
+        selectedTerritoryFromRanking?.let { territoryFromRanking ->
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngZoom(territoryFromRanking.center, 17f)
+            )
+
+            selectedTerritory = territoryFromRanking
+        }
+    }
+
 
     val context = LocalContext.current
     val fusedLocationClient = remember {
@@ -83,7 +97,6 @@ fun TerriRunMapScreen(
     var previousTerritories by remember { mutableStateOf<List<Territory>>(emptyList()) }
     var summaryTitle by remember { mutableStateOf("") }
     var summaryMessage by remember { mutableStateOf("") }
-    var selectedTerritory by remember { mutableStateOf<Territory?>(null) }
     val territories = remember { mutableStateListOf<Territory>() }
     var capitalReinforcementPoints by remember {
         mutableStateOf(uiState.reinforcementPoints)
@@ -95,9 +108,6 @@ fun TerriRunMapScreen(
     val authManager = remember { AuthManager() }
     var calories by remember { mutableStateOf(0f) }
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(defaultLocation, 15f)
-    }
 
     val locationRequest = remember {
         LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
@@ -410,8 +420,12 @@ fun TerriRunMapScreen(
                             control = 20
                         )
 
-                        territories.add(newTerritory)
+// Fusiona si hay territorio existente
+                        val finalTerritory = mergeOrCreateTerritory(newTerritory, territories, uid)
 
+                        selectedTerritory = finalTerritory
+                        nextTerritoryId++
+                        //territories.add(newTerritory)
                         territoryRepository.saveTerritory(
                             newTerritory.toDto()
                         ) { success, error ->
@@ -794,4 +808,57 @@ fun TerriRunMapScreen(
 
 
 }
+fun mergeOrCreateTerritory(
+    newTerritory: Territory,
+    existingTerritories: MutableList<Territory>,
+    currentUserId: String
+): Territory {
+    val overlap = existingTerritories.find { it.ownerId == currentUserId && it.type == SettlementType.CASTLE && polygonsOverlap(it.points, newTerritory.points) }
 
+    return if (overlap != null) {
+        // Fusionar los puntos para que abarque el rango más grande
+        val mergedPoints = mergePolygons(overlap.points, newTerritory.points)
+        val mergedCenter = calculateCenter(mergedPoints)
+        val mergedControl = minOf(overlap.control + 20, 100) // sube control
+
+        val mergedTerritory = overlap.copy(
+            points = mergedPoints,
+            center = mergedCenter,
+            control = mergedControl
+        )
+
+        // Reemplaza el territorio antiguo por el fusionado
+        existingTerritories.replaceAll {
+            if (it.id == overlap.id && it.ownerId == currentUserId) mergedTerritory else it
+        }
+
+        mergedTerritory
+    } else {
+        // No hay superposición, se crea uno nuevo
+        existingTerritories.add(newTerritory)
+        newTerritory
+    }
+}
+// Verifica si dos polígonos se superponen (aproximación simple)
+fun polygonsOverlap(p1: List<LatLng>, p2: List<LatLng>): Boolean {
+    val p1Bounds = getBounds(p1)
+    val p2Bounds = getBounds(p2)
+    return p1Bounds.intersect(p2Bounds)
+}
+
+// Calcula bounds de un polígono
+fun getBounds(points: List<LatLng>): android.graphics.RectF {
+    val lats = points.map { it.latitude }
+    val lngs = points.map { it.longitude }
+    return android.graphics.RectF(
+        lngs.minOrNull()?.toFloat() ?: 0f,
+        lats.minOrNull()?.toFloat() ?: 0f,
+        lngs.maxOrNull()?.toFloat() ?: 0f,
+        lats.maxOrNull()?.toFloat() ?: 0f
+    )
+}
+
+// Fusiona dos polígonos (simplemente concatena y elimina duplicados)
+fun mergePolygons(p1: List<LatLng>, p2: List<LatLng>): List<LatLng> {
+    return (p1 + p2).distinctBy { it.latitude to it.longitude }
+}

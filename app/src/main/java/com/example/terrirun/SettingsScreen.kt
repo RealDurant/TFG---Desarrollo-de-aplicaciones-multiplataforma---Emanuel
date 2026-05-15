@@ -1,9 +1,16 @@
 package com.example.terrirun
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -21,7 +28,8 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Text(
             text = "Ajustes",
@@ -81,31 +89,50 @@ fun SettingsScreen(
                     "Tus datos de perfil, territorios y ranking se guardan en Firebase."
             )
         }
-        Button(
-            onClick = onOpenPrivacy,
-            modifier = Modifier.padding(top = 12.dp)
-        ) {
-            Text(if (language == "en") "Privacy and data" else "Privacidad y datos")
-        }
+        SettingsButton(
+            text = if (language == "en") "Privacy and data" else "Privacidad y datos",
+            onClick = onOpenPrivacy
+        )
 
-        Button(
-            onClick = onBack,
-            modifier = Modifier.padding(top = 24.dp)
-        ) {
-            Text(appText("back", language))
-        }
-        Button(
-            onClick = onOpenNotifications,
-            modifier = Modifier.padding(top = 12.dp)
-        ) {
-            Text(if (language == "en") "Notifications" else "Notificaciones")
-        }
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.padding(top = 12.dp)
-        ) {
-            Text(appText("logout", language))
-        }
+        SettingsButton(
+            text = appText("back", language),
+            onClick = onBack
+        )
 
+        SettingsButton(
+            text = if (language == "en") "Notifications" else "Notificaciones",
+            onClick = onOpenNotifications
+        )
+
+        SettingsButton(
+            text = appText("logout", language),
+            onClick = onLogout
+        )
+
+    }
+}
+@Composable
+fun SettingsButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .height(50.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        color = MaterialTheme.colorScheme.primary, // color uniforme para los botones
+        tonalElevation = 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                color = MaterialTheme.colorScheme.onPrimary, // texto blanco sobre azul
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
     }
 }

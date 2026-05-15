@@ -20,13 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.google.maps.android.compose.CameraPositionState
+import com.google.android.gms.maps.CameraUpdateFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainGameScreen(
     permissionGranted: Boolean,
     onLogout: () -> Unit,
-    onOpenSettings: () -> Unit
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.MAP) }
 
@@ -36,7 +37,7 @@ fun MainGameScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { SettingsManager(context) }
     var language by remember { mutableStateOf(settingsManager.getLanguage()) }
-
+    var selectedPlayer by remember { mutableStateOf<PlayerRanking?>(null) }
     LaunchedEffect(uiState.playerProfile) {
         if (uiState.playerProfile.name.isNotBlank()) {
             showNotificationDialog = true
@@ -52,7 +53,7 @@ fun MainGameScreen(
         AppScreen.PROFILE -> appText("profile", language)
         AppScreen.SETTINGS -> appText("settings", language)
         AppScreen.PRIVACY -> appText("privacy", language)
-        AppScreen.NOTIFICATIONS -> appText("notifications", language) // 👈 AÑADE ESTA
+        AppScreen.NOTIFICATIONS -> appText("notifications", language)
     }
     var notifications by remember { mutableStateOf<List<GameNotification>>(emptyList()) }
     LaunchedEffect(Unit) {
@@ -63,6 +64,7 @@ fun MainGameScreen(
             }
         }
     }
+    var selectedTerritory by remember { mutableStateOf<Territory?>(null) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -101,21 +103,22 @@ fun MainGameScreen(
             AppScreen.MAP -> {
                 TerriRunMapScreen(
                     permissionGranted = permissionGranted,
-                    onLogout = {
-                        gameViewModel.logout()
-                        onLogout()
-                    },
                     modifier = Modifier.padding(innerPadding),
                     uiState = uiState,
-                    onRefreshData = { gameViewModel.refreshTerritories() },
-                    language = language
+                    language = language,
+                    selectedTerritoryFromRanking = selectedTerritory,
+                    onRefreshData = { gameViewModel.refreshTerritories() }
                 )
             }
             AppScreen.RANKING -> {
                 RankingScreen(
                     uiState = uiState,
-                    modifier = Modifier.padding(innerPadding),
-                    language = language
+                    language = language,
+                    onCenterMap = { territory ->
+                        // Esta función solo se llama cuando se pulsa un territorio dentro de la carta
+                        selectedTerritory = territory
+                        currentScreen = AppScreen.MAP
+                    }
                 )
             }
             AppScreen.PROFILE -> {
@@ -223,4 +226,12 @@ fun MainGameScreen(
             }
         }
     }
+}
+suspend fun centerMapOnTerritory(
+    territory: Territory,
+    cameraState: CameraPositionState
+) {
+    cameraState.animate(
+        update = CameraUpdateFactory.newLatLngZoom(territory.center, 17f)
+    )
 }

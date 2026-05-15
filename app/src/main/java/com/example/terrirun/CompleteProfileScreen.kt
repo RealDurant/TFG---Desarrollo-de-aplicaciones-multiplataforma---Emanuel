@@ -61,7 +61,7 @@ fun CompleteProfileScreen(
     var selectedAvatar by remember { mutableStateOf("avatar_1") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-
+    val context = androidx.compose.ui.platform.LocalContext.current
     val availableAvatars = listOf(
         "avatar_1" to "⚔️",
         "avatar_2" to "🛡️",
@@ -262,11 +262,19 @@ fun CompleteProfileScreen(
                     0xFFFFFF and solidColor.toArgb()
                 )
 
+                val imagePath = selectedImageUri?.let { uri ->
+                    saveProfileImageToInternalStorage(
+                        context = context,
+                        imageUri = uri,
+                        userId = email
+                    )
+                } ?: ""
+
                 onSaveProfile(
                     userName,
                     colorHex,
                     selectedAvatar,
-                    selectedImageUri?.toString() ?: ""
+                    imagePath
                 )            },
             modifier = Modifier.padding(top = 20.dp)
         ) {

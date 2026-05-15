@@ -1,7 +1,9 @@
 package com.example.terrirun
 
 
+import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.firestore
 
 class UserRepository {
 
@@ -107,6 +109,20 @@ class UserRepository {
                 val list = result.map { it.toObject(GameNotification::class.java) }
                 onResult(list)
             }
+    }
+
+    fun updateProfileImage(
+        userId: String,
+        imagePath: String,
+        callback: (success: Boolean, error: String?) -> Unit
+    ) {
+        // Aquí puedes usar Firebase, Room, SharedPreferences, etc.
+        // Ejemplo con Firestore (simplificado):
+        val db = Firebase.firestore
+        db.collection("users").document(userId)
+            .update("profileImage", imagePath)
+            .addOnSuccessListener { callback(true, null) }
+            .addOnFailureListener { e -> callback(false, e.message) }
     }
 
 }

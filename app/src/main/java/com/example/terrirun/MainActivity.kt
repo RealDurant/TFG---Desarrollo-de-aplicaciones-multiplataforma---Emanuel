@@ -82,9 +82,6 @@ class MainActivity : ComponentActivity() {
                         onLogout = {
                             isLoggedIn = false
                         },
-                        onOpenSettings = {
-                            isLoggedIn = true // no cambia login
-                        }
                     )
                 } else {
                     AuthFlowScreen(

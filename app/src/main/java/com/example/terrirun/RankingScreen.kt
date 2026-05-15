@@ -1,15 +1,24 @@
 package com.example.terrirun
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,13 +26,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import kotlin.String
 
 @Composable
 fun RankingScreen(
     uiState: GameUiState,
+    language: String,
     modifier: Modifier = Modifier,
-    language: String
+    onCenterMap: (Territory) -> Unit
 ) {
     val ranking = uiState.territories
         .groupBy { it.ownerId }
@@ -43,6 +54,9 @@ fun RankingScreen(
                 .thenByDescending { it.territoryCount }
         )
 
+    // Estado para jugador seleccionado (para abrir carta)
+    var selectedPlayer by remember { mutableStateOf<PlayerRanking?>(null) }
+    val coroutineScope = rememberCoroutineScope()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -54,24 +68,13 @@ fun RankingScreen(
             text = appText("ranking_title", language),
             style = MaterialTheme.typography.headlineMedium
         )
-
         Text(
             text = appText("ranking_subtitle", language),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray,
             modifier = Modifier.padding(top = 4.dp)
         )
-
-        if (ranking.isEmpty()) {
-            SectionCard(
-                title = appText("no_data", language),
-                modifier = Modifier.padding(top = 16.dp)
-            ) {
-                Text(appText("no_conquered_territories", language))
-            }
-            return@Column
-        }
-
+// Mostrar podium solo si hay al menos 3 jugadores
         if (ranking.size >= 3) {
             PodiumSection(
                 topPlayers = ranking.take(3),
@@ -79,23 +82,72 @@ fun RankingScreen(
                 modifier = Modifier.padding(top = 24.dp)
             )
         }
+        var searchQuery by remember { mutableStateOf("") }
 
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            label = { Text(if (language == "en") "Search player" else "Buscar jugador") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+        )
+        val filteredRanking = ranking.filter {
+            it.playerName.contains(searchQuery, ignoreCase = true)
+        }
         SectionCard(
             title = appText("general_ranking", language),
             modifier = Modifier.padding(top = 24.dp)
         ) {
-            ranking.forEachIndexed { index, player ->
+            filteredRanking.forEachIndexed { index, player ->
                 RankingRow(
                     position = index + 1,
                     player = player,
                     isCurrentUser = player.ownerId == uiState.currentUserId,
                     language = language,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedPlayer = player }
                 )
             }
         }
     }
+
+    // -------------------
+    // DIALOGO DE JUGADOR
+    // -------------------
+    // ─── Carta del jugador ───
+    selectedPlayer?.let { player ->
+        val playerTerritories = uiState.territories.filter { it.ownerId == player.ownerId }
+
+        AlertDialog(
+            onDismissRequest = { selectedPlayer = null },
+            title = { Text(if (player.ownerId == uiState.currentUserId) "Tú" else player.playerName) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    playerTerritories.forEach { territory ->
+                        Text(
+                            text = "${territory.name} - ${territory.type} - ${territory.control}%",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onCenterMap(territory) // Solo aquí centramos el mapa
+                                    selectedPlayer = null // Cerramos la carta
+                                }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedPlayer = null }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
 }
+
 
 @Composable
 fun PodiumSection(
