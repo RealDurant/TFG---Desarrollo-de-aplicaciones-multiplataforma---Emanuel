@@ -4,9 +4,13 @@ import android.annotation.SuppressLint
 import android.location.Location
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -53,7 +57,10 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Whatshot
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import com.google.android.gms.maps.CameraUpdateFactory
+import kotlinx.coroutines.launch
 
 @SuppressLint("MissingPermission", "UnrememberedMutableState")
 @Composable
@@ -70,6 +77,7 @@ fun TerriRunMapScreen(
     }
 
     var selectedTerritory by remember { mutableStateOf<Territory?>(null) }
+    var showClaimDialog by remember { mutableStateOf(false) }
     LaunchedEffect(selectedTerritoryFromRanking) {
         selectedTerritoryFromRanking?.let { territoryFromRanking ->
             cameraPositionState.animate(
@@ -82,6 +90,7 @@ fun TerriRunMapScreen(
 
 
     val context = LocalContext.current
+
     val fusedLocationClient = remember {
         LocationServices.getFusedLocationProviderClient(context)
     }
@@ -94,9 +103,13 @@ fun TerriRunMapScreen(
     var totalDistanceMeters by remember { mutableStateOf(0f) }
     var showSummaryDialog by remember { mutableStateOf(false) }
     var showAttackAlert by remember { mutableStateOf(false) }
+
     var previousTerritories by remember { mutableStateOf<List<Territory>>(emptyList()) }
     var summaryTitle by remember { mutableStateOf("") }
     var summaryMessage by remember { mutableStateOf("") }
+    var lastAttackData by remember {
+        mutableStateOf<Pair<Int, List<LatLng>>?>(null)
+    }
     val territories = remember { mutableStateListOf<Territory>() }
     var capitalReinforcementPoints by remember {
         mutableStateOf(uiState.reinforcementPoints)
@@ -137,10 +150,15 @@ fun TerriRunMapScreen(
         }
     }
     val myTerritories = territories
-        .filter { it.ownerId == uiState.currentUserId }
+        .filter {
+            it.ownerId == uiState.currentUserId &&
+                    it.control > 0
+        }
         .sortedBy { it.control }
     val capitalTerritory = territories.firstOrNull {
-        it.ownerId == uiState.currentUserId && it.type == SettlementType.CASTLE
+        it.ownerId == uiState.currentUserId &&
+                it.type == SettlementType.CASTLE &&
+                it.control > 0
     }
 
     val playerProfile = uiState.playerProfile
@@ -252,6 +270,7 @@ fun TerriRunMapScreen(
                 )
             }
             territories.forEach { territory ->
+                val isNeutralizedTerritory = territory.control == 0
 
                 val myUid = uiState.currentUserId
                 val isMine = territory.ownerId == myUid
@@ -271,7 +290,7 @@ fun TerriRunMapScreen(
 
 
                 val ownerName = when {
-                    territory.control == 0 -> "Sin dueño"
+                    territory.ownerId.isBlank() || territory.control == 0 -> "Sin dueño"
                     isMine -> playerProfile.name
                     else -> ownerNames[territory.ownerId] ?: "Cargando..."
                 }
@@ -295,10 +314,11 @@ fun TerriRunMapScreen(
                     SettlementType.VILLAGE -> territory.name
                 }
 
-                val markerTitle = if (territory.control > 0) {
-                    baseTitle
-                } else {
-                    "$baseTitle (Neutralizado)"
+                val markerTitle = when {
+                    territory.control == 0 -> "⚪ $baseTitle (Reclamable)"
+                    territory.control in 1..20 -> "🔴 $baseTitle"
+                    territory.control in 21..60 -> "🟡 $baseTitle"
+                    else -> "🟢 $baseTitle"
                 }
 
                 val territoryTypeLabel = when (territory.type) {
@@ -306,7 +326,8 @@ fun TerriRunMapScreen(
                     SettlementType.VILLAGE -> "Poblado"
                 }
 
-                val markerSnippet = "$territoryTypeLabel · $ownerName · Control: ${territory.control}%"
+                val markerSnippet =
+                    "$territoryTypeLabel · $ownerName · Estado: ${territory.control}%"
 
                 Marker(
                     state = MarkerState(position = territory.center),
@@ -375,7 +396,8 @@ fun TerriRunMapScreen(
                     } else 9999f
 
                     val patrolledTerritory = findPatrolledTerritory(routePoints, territories)
-                    val attackedTerritory = findAttackedEnemyTerritory(
+
+                    val enemyAttackResult = findEnemyTerritoryAffectedByRoute(
                         routePoints = routePoints,
                         territories = territories,
                         currentUserId = uiState.currentUserId
@@ -390,8 +412,159 @@ fun TerriRunMapScreen(
                                 elapsedTimeSeconds >= 60 &&
                                 distanceToStart <= 80f
 
-                    if (canCreateTerritory) {
+                    if (enemyAttackResult != null && meetsActivityRequirements) {
+                        val attackedTerritory = enemyAttackResult.territory
+                        val attackDamage = calculateRouteAttackDamage(
+                            elapsedTimeSeconds = elapsedTimeSeconds,
+                            totalDistanceMeters = totalDistanceMeters,
+                            attackType = enemyAttackResult.attackType,
+                            territoryType = enemyAttackResult.territory.type
+                        )
+                        val newControl = maxOf(attackedTerritory.control - attackDamage, 0)
+                        lastAttackData =
+                            attackedTerritory.id to routePoints.toList()
+
+                        territories.replaceAll {
+                            if (it.id == attackedTerritory.id &&
+                                it.ownerId == attackedTerritory.ownerId
+                            ) {
+
+                                if (newControl == 0) {
+                                    it.copy(
+                                        control = 0,
+                                        ownerId = "",
+                                        type = SettlementType.VILLAGE
+                                    )
+                                } else {
+                                    it.copy(control = newControl)
+                                }
+
+                            } else {
+                                it
+                            }
+                        }
+
+                        if (newControl == 0) {
+                            territoryRepository.deleteTerritory(
+                                ownerId = attackedTerritory.ownerId,
+                                territoryId = attackedTerritory.id
+                            ) { _, _ ->
+
+                                territoryRepository.saveTerritory(
+                                    attackedTerritory.copy(
+                                        ownerId = "",
+                                        name = "Territorio neutralizado",
+                                        type = SettlementType.VILLAGE,
+                                        control = 0
+                                    ).toDto()
+                                ) { _, _ ->
+                                    onRefreshData()
+                                }
+                            }
+                        } else {
+                            syncTerritoryControl(
+                                attackedTerritory.ownerId,
+                                attackedTerritory.id,
+                                newControl
+                            )
+                        }
+                        selectedTerritory =
+                            if (newControl == 0) {
+                                attackedTerritory.copy(
+                                    control = 0,
+                                    ownerId = "",
+                                    name = "Territorio neutralizado",
+                                    type = SettlementType.VILLAGE
+                                )
+                            } else {
+                                attackedTerritory.copy(control = newControl)
+                            }
+
+                        val notification = GameNotification(
+                            userId = attackedTerritory.ownerId,
+                            title = "⚔️ Ataque recibido",
+                            message = "Han atacado tu territorio ${attackedTerritory.name}. Control restante: $newControl%."
+                        )
+
+                        userRepository.createNotification(notification) { _, _ -> }
+
+                        NotificationRepository().sendNotification(
+                            userId = attackedTerritory.ownerId,
+                            title = "⚔️ Tu territorio está siendo atacado",
+                            message = "Han atacado ${attackedTerritory.name} y ahora queda al $newControl% de control."
+                        )
+
+                        val attackText = when (enemyAttackResult.attackType) {
+                            AttackType.FULL_SURROUND ->
+                                "Has rodeado completamente un territorio enemigo. El daño aplicado es mayor."
+
+                            AttackType.PARTIAL ->
+                                "Has realizado una incursión parcial sobre un territorio enemigo."
+                        }
+
+                        summaryTitle = "Ataque finalizado"
+                        summaryMessage = """
+                            $attackText
+                            
+                            Territorio atacado: ${attackedTerritory.name}
+                            Daño causado: -$attackDamage%
+                            Tipo de ataque: ${
+                                                    if (enemyAttackResult.attackType == AttackType.FULL_SURROUND)
+                                                        "Rodeo completo"
+                                                    else
+                                                        "Ataque parcial"
+                                                }
+                            Control restante: $newControl%
+                            
+                            ${
+                                                    if (newControl == 0)
+                                                        "El territorio ha quedado neutralizado. Ahora puede ser reclamado."
+                                                    else
+                                                        "Necesitarás más ataques para neutralizarlo."
+                                                }
+                        """.trimIndent()
+
+                        showSummaryDialog = true
+
+                    } else if (patrolledTerritory != null &&
+                        patrolledTerritory.ownerId == uiState.currentUserId &&
+                        meetsActivityRequirements &&
+                        !routeExpandsOwnTerritory(routePoints, patrolledTerritory)
+                    ) {
+                        val updatedControl = minOf(patrolledTerritory.control + 5, 100)
+
+                        territories.replaceAll {
+                            if (it.id == patrolledTerritory.id && it.ownerId == patrolledTerritory.ownerId) {
+                                it.copy(control = updatedControl)
+                            } else it
+                        }
+
+                        syncTerritoryControl(
+                            patrolledTerritory.ownerId,
+                            patrolledTerritory.id,
+                            updatedControl
+                        )
+                        summaryTitle = "Patrulla completada"
+                        summaryMessage = """
+                            Has reforzado un territorio de tu reino.
+                            
+                            Territorio: ${patrolledTerritory.name}
+                            Control actual: $updatedControl%
+                            
+                            Patrullar territorios propios aumenta su control y los hace más resistentes.
+                        """.trimIndent()
+
+                    }else if (canCreateTerritory && enemyAttackResult == null) {
+                        // AQUÍ DEJAS TU BLOQUE ACTUAL DE CREAR / FUSIONAR TERRITORIO
                         val territoryPoints = routePoints.toList()
+
+                        if (territoryPoints.size < 3) {
+                            summaryTitle = "Actividad no válida"
+                            summaryMessage = "No se ha podido crear un territorio porque la ruta no tiene suficientes puntos."
+                            showSummaryDialog = true
+                            return@PrimaryFloatingButton
+                        }
+
                         val territoryCenter = calculateCenter(territoryPoints)
 
                         val settlementType = if (territories.none { it.ownerId == uiState.currentUserId }) {
@@ -421,13 +594,13 @@ fun TerriRunMapScreen(
                         )
 
 // Fusiona si hay territorio existente
-                        val finalTerritory = mergeOrCreateTerritory(newTerritory, territories, uid)
-
+                        val mergeResult = mergeOrCreateTerritory(newTerritory, territories, uid)
+                        val finalTerritory = mergeResult.territory
+                        val wasMerged = mergeResult.wasMerged
                         selectedTerritory = finalTerritory
-                        nextTerritoryId++
-                        //territories.add(newTerritory)
+
                         territoryRepository.saveTerritory(
-                            newTerritory.toDto()
+                            finalTerritory.toDto()
                         ) { success, error ->
                             if (!success) {
                                 println("Error guardando territorio: $error")
@@ -438,92 +611,36 @@ fun TerriRunMapScreen(
 
                         nextTerritoryId++
 
+
+
                         val settlementName = when (settlementType) {
                             SettlementType.CASTLE -> "Capital"
                             SettlementType.VILLAGE -> "Poblado"
                         }
 
-                        summaryTitle = "Actividad finalizada"
-                        summaryMessage = """
-                    Has completado un circuito válido.
-                    
-                    Territorio creado: Sí
-                    Nombre: $territoryName
-                    Tipo de asentamiento: $settlementName
-                    Control inicial: 20%
-                    Tiempo: ${formatTime(elapsedTimeSeconds)}
-                    Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
-                """.trimIndent()
+                        summaryTitle = if (wasMerged) "Territorio ampliado y reforzado" else "Territorio creado"
 
-                    } else if (patrolledTerritory != null &&
-                        patrolledTerritory.ownerId == uiState.currentUserId &&
-                        meetsActivityRequirements
-                    ) {
-                        val updatedControl = minOf(patrolledTerritory.control + 5, 100)
-
-                        territories.replaceAll {
-                            if (it.id == patrolledTerritory.id && it.ownerId == patrolledTerritory.ownerId) {
-                                it.copy(control = updatedControl)
-                            } else it
-                        }
-
-                        syncTerritoryControl(
-                            patrolledTerritory.ownerId,
-                            patrolledTerritory.id,
-                            updatedControl
-                        )
-
-                        summaryTitle = "Actividad finalizada"
-                        summaryMessage = """
-                    Has patrullado un territorio existente.
-                    
-                    Territorio: ${patrolledTerritory.name}
-                    Control actual: $updatedControl%
-                """.trimIndent()
-
-                    } else if (attackedTerritory != null && meetsActivityRequirements) {
-                        val attackDamage = calculateAttackDamage(
-                            elapsedTimeSeconds,
-                            totalDistanceMeters,
-                            attackedTerritory.type
-                        )
-
-                        val newControl = maxOf(attackedTerritory.control - attackDamage, 0)
-                        val notification = GameNotification(
-                            userId = attackedTerritory.ownerId,
-                            title = "⚔️ Ataque recibido",
-                            message = "Han atacado tu territorio ${attackedTerritory.name}"
-                        )
-
-                        userRepository.createNotification(notification) { _, _ -> }
-                        val notificationRepository = NotificationRepository()
-
-                        notificationRepository.sendNotification(
-                            userId = attackedTerritory.ownerId,
-                            title = "⚔️ Tu territorio está siendo atacado",
-                            message = "Han atacado ${attackedTerritory.name} y ha perdido $attackDamage% de control."
-                        )
-
-                        territories.replaceAll {
-                            if (it.id == attackedTerritory.id && it.ownerId == attackedTerritory.ownerId) {
-                                it.copy(control = newControl)
-                            } else it
-                        }
-
-                        syncTerritoryControl(
-                            attackedTerritory.ownerId,
-                            attackedTerritory.id,
-                            newControl
-                        )
-
-                        summaryTitle = "Actividad finalizada"
-                        summaryMessage = """
-                    Has atacado un territorio enemigo.
-                    
-                    Territorio: ${attackedTerritory.name}
-                    Daño: -$attackDamage
-                    Control restante: $newControl%
-                """.trimIndent()
+                        summaryMessage = if (wasMerged) {
+                            """
+                                Has ampliado un territorio existente.
+                                
+                                Territorio: ${finalTerritory.name}
+                                Control actual: ${finalTerritory.control}%
+                                Tiempo: ${formatTime(elapsedTimeSeconds)}
+                                Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
+                            """.trimIndent()
+                                                } else {
+                                                    """
+                                Has completado un circuito válido.
+                                
+                                Territorio creado: Sí
+                                Nombre: ${finalTerritory.name}
+                                Tipo de asentamiento: $settlementName
+                                Control inicial: ${finalTerritory.control}%
+                                Tiempo: ${formatTime(elapsedTimeSeconds)}
+                                Distancia: ${"%.2f".format(totalDistanceMeters / 1000)} km
+                            """.trimIndent()
+                                                }
 
                     } else {
                         val activityNearCapital =
@@ -548,9 +665,12 @@ fun TerriRunMapScreen(
                             else
                                 "No se generó refuerzo"
                         }
-                """.trimIndent()
+                    """.trimIndent()
                     }
-
+                    routePoints.clear()
+                    elapsedTimeSeconds = 0
+                    totalDistanceMeters = 0f
+                    calories = 0f
                     showSummaryDialog = true
 
                 } else {
@@ -558,6 +678,7 @@ fun TerriRunMapScreen(
                     elapsedTimeSeconds = 0
                     totalDistanceMeters = 0f
                     calories = 0f
+                    lastAttackData = null
                     isTracking = true
                 }
             },
@@ -599,8 +720,14 @@ fun TerriRunMapScreen(
                 title = territory.name,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 110.dp)
+                    .padding(start = 12.dp, end = 12.dp, bottom = 105.dp)
+                    .heightIn(max = 280.dp)
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
                 Text(
                     text = "Tipo: ${
                         when (territory.type) {
@@ -610,11 +737,31 @@ fun TerriRunMapScreen(
                     }"
                 )
                 Text(text = "Control: ${territory.control}%")
+                    Spacer(modifier = Modifier.height(8.dp))
 
+                    LinearProgressIndicator(
+                        progress = { territory.control / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp),
+                        color = when {
+                            territory.control == 0 -> Color.Gray
+                            territory.control in 1..20 -> Color.Red
+                            territory.control in 21..60 -> Color(0xFFFFC107)
+                            else -> Color(0xFF2E7D32)
+                        },
+                        trackColor = Color.LightGray
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Estado: ${territoryStatusText(territory.control)}"
+                    )
                 Text(
                     text = when {
                         isMine -> "Propietario: ${playerProfile.name}"
-                        isNeutralized -> "Propietario: Sin dueño"
+                        isNeutralized || territory.ownerId.isBlank() -> "Propietario: Sin dueño"
                         else -> "Propietario: ${ownerNames[territory.ownerId] ?: "Cargando..."}"
                     }
                 )
@@ -629,48 +776,145 @@ fun TerriRunMapScreen(
                 )
 
 
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-
-                    Button(
-                        onClick = {
-                            if (canClaim && currentUserId.isNotBlank()) {
-                                val previousOwnerId = territory.ownerId
-
-                                val reclaimedTerritory = territory.copy(
-                                    ownerId = currentUserId,
-                                    control = 50
-                                )
-
-                                territories.replaceAll { current ->
-                                    if (current.ownerId == territory.ownerId && current.id == territory.id) {
-                                        reclaimedTerritory
-                                    } else {
-                                        current
-                                    }
-                                }
-
-                                selectedTerritory = reclaimedTerritory
-
-                                if (previousOwnerId.isNotBlank() && previousOwnerId != currentUserId) {
-                                    territoryRepository.deleteTerritory(
-                                        ownerId = previousOwnerId,
-                                        territoryId = territory.id
-                                    ) { _, _ ->
-                                        territoryRepository.saveTerritory(
-                                            reclaimedTerritory.toDto()
-                                        ) { _, _ ->  onRefreshData()}
-                                    }
-                                } else {
-                                    territoryRepository.saveTerritory(
-                                        reclaimedTerritory.toDto()
-                                    ) { _, _ ->  onRefreshData()}
-                                }
-                            }
-                        },
-                        enabled = canClaim,
-                        modifier = Modifier.padding(top = 6.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Reclamar")
+
+                    if (canClaim) {
+                        Button(
+                            onClick = {
+                                if (currentUserId.isNotBlank()) {
+                                    val previousOwnerId = territory.ownerId
+                                    val wasNeutralTerritory = previousOwnerId.isBlank()
+
+                                    val attackRoute = lastAttackData?.second ?: territory.points
+
+                                    val splitResult =
+                                        if (wasNeutralTerritory) {
+                                            SplitTerritoryResult(
+                                                conqueredPart = territory.copy(
+                                                    ownerId = currentUserId,
+                                                    name = "Territorio reclamado",
+                                                    type = SettlementType.VILLAGE,
+                                                    control = 20
+                                                ),
+                                                remainingPart = null
+                                            )
+                                        } else {
+                                            splitTerritoryAfterClaim(
+                                                original = territory,
+                                                conquerRoute = attackRoute,
+                                                newOwnerId = currentUserId
+                                            )
+                                        }
+
+                                    val conqueredTerritory = splitResult.conqueredPart
+                                    val remainingTerritory = splitResult.remainingPart
+
+                                    territories.removeAll {
+                                        it.ownerId == territory.ownerId && it.id == territory.id
+                                    }
+
+                                    if (remainingTerritory != null && previousOwnerId.isNotBlank()) {
+                                        territories.add(remainingTerritory)
+                                    }
+
+                                    territories.add(conqueredTerritory)
+
+                                    selectedTerritory = conqueredTerritory
+                                    lastAttackData = null
+                                    routePoints.clear()
+                                    elapsedTimeSeconds = 0
+                                    totalDistanceMeters = 0f
+                                    calories = 0f
+
+                                    if (previousOwnerId.isNotBlank()) {
+                                        val conquestNotification = GameNotification(
+                                            userId = previousOwnerId,
+                                            title = "🏳️ Territorio conquistado",
+                                            message = "Han reclamado una zona de tu territorio ${territory.name}."
+                                        )
+
+                                        userRepository.createNotification(conquestNotification) { _, _ -> }
+
+                                        NotificationRepository().sendNotification(
+                                            userId = previousOwnerId,
+                                            title = "🏳️ Has perdido territorio",
+                                            message = "Un rival ha reclamado una zona de ${territory.name}."
+                                        )
+                                    }
+
+                                    summaryTitle = "Territorio reclamado"
+                                    summaryMessage = if (remainingTerritory == null) {
+                                        """
+                                            Has conquistado completamente el territorio.
+                                            
+                                            Nuevo territorio: ${conqueredTerritory.name}
+                                            Control inicial: ${conqueredTerritory.control}%
+                                        """.trimIndent()
+                                    } else {
+                                        """
+                                            Has reclamado una zona conquistada.
+                                            
+                                            Nuevo territorio: ${conqueredTerritory.name}
+                                            Control inicial: ${conqueredTerritory.control}%
+                                            
+                                            La parte restante del territorio anterior queda debilitada al 20%.
+                                        """.trimIndent()
+                                    }
+
+                                    showSummaryDialog = true
+
+                                    if (!wasNeutralTerritory) {
+                                        territoryRepository.deleteTerritory(
+                                            ownerId = previousOwnerId,
+                                            territoryId = territory.id
+                                        ) { _, _ ->
+
+                                        if (remainingTerritory != null && previousOwnerId.isNotBlank()) {
+                                            territoryRepository.saveTerritory(
+                                                remainingTerritory.toDto()
+                                            ) { _, _ ->
+
+                                                territoryRepository.saveTerritory(
+                                                    conqueredTerritory.toDto()
+                                                ) { _, _ ->
+                                                    onRefreshData()
+                                                }
+                                            }
+                                        } else {
+                                            territoryRepository.saveTerritory(
+                                                conqueredTerritory.toDto()
+                                            ) { _, _ ->
+                                                onRefreshData()
+                                            }
+                                        }
+                                    }} else {
+                                        territoryRepository.saveTerritory(
+                                            conqueredTerritory.toDto()
+                                        ) { _, _ ->
+                                            onRefreshData()
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp
+                            )
+                        ) {
+                            Text("Reclamar")
+                        }
+                    }
+                    if (isNeutralized && lastAttackData?.first != territory.id) {
+                        Text(
+                            text = "Este territorio está neutralizado, pero necesitas atacarlo antes para reclamarlo.",
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
 
                     Button(
@@ -692,18 +936,27 @@ fun TerriRunMapScreen(
                             }
                         },
                         enabled = canRemoteReinforce,
-                        modifier = Modifier.padding(top = 6.dp)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 6.dp
+                        )
                     ) {
                         Text("Reforzar")
                     }
 
-                    Button(
-                        onClick = { selectedTerritory = null },
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Text("Cerrar")
-                    }
+                        Button(
+                            onClick = { selectedTerritory = null },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp
+                            )
+                        ) {
+                            Text("Cerrar")
+                        }
                 }
+            }
             }
         }
 
@@ -745,13 +998,7 @@ fun TerriRunMapScreen(
                                 SettlementType.VILLAGE -> "Poblado"
                             }
 
-                            val territoryStatus = when {
-                                territory.control == 0 -> "Neutralizado"
-                                territory.control in 1..20 -> "Muy débil"
-                                territory.control in 21..79 -> "En consolidación"
-                                territory.control in 80..100 -> "Estable"
-                                else -> "Desconocido"
-                            }
+                            val territoryStatus = territoryStatusText(territory.control)
 
                             TerritoryMiniCard(
                                 title = if (territory.type == SettlementType.CASTLE) {
@@ -766,8 +1013,19 @@ fun TerriRunMapScreen(
                                     .padding(top = 8.dp)
                                     .clickable {
                                         selectedTerritory = territory
-                                        cameraPositionState.position =
-                                            CameraPosition.fromLatLngZoom(territory.center, 17f)
+
+                                        kotlinx.coroutines.CoroutineScope(
+                                            kotlinx.coroutines.Dispatchers.Main
+                                        ).launch {
+
+                                            cameraPositionState.animate(
+                                                update = CameraUpdateFactory.newLatLngZoom(
+                                                    territory.center,
+                                                    17f
+                                                ),
+                                                durationMs = 1200
+                                            )
+                                        }
                                     }
                             )
                         }
@@ -781,9 +1039,21 @@ fun TerriRunMapScreen(
             enabled = capitalTerritory != null,
             onClick = {
                 capitalTerritory?.let {
-                    cameraPositionState.position =
-                        CameraPosition.fromLatLngZoom(it.center, 17f)
+
                     selectedTerritory = it
+
+                    kotlinx.coroutines.CoroutineScope(
+                        kotlinx.coroutines.Dispatchers.Main
+                    ).launch {
+
+                        cameraPositionState.animate(
+                            update = CameraUpdateFactory.newLatLngZoom(
+                                it.center,
+                                17f
+                            ),
+                            durationMs = 1200
+                        )
+                    }
                 }
             },
             modifier = Modifier
@@ -808,13 +1078,25 @@ fun TerriRunMapScreen(
 
 
 }
+const val MIN_ROUTE_POINTS_FOR_ATTACK = 5
+const val MIN_ROUTE_POINTS_INSIDE_TERRITORY = 5
+const val CLOSED_ROUTE_MAX_DISTANCE_METERS = 80f
+const val MIN_ROUTE_POINTS_FOR_TERRITORY = 3
+const val MIN_REMAINING_POINTS_AFTER_CLAIM = 5
+data class MergeTerritoryResult(
+    val territory: Territory,
+    val wasMerged: Boolean
+)
 fun mergeOrCreateTerritory(
     newTerritory: Territory,
     existingTerritories: MutableList<Territory>,
     currentUserId: String
-): Territory {
-    val overlap = existingTerritories.find { it.ownerId == currentUserId && it.type == SettlementType.CASTLE && polygonsOverlap(it.points, newTerritory.points) }
-
+): MergeTerritoryResult {
+    val overlap = existingTerritories.find {
+        it.ownerId == currentUserId &&
+                it.control > 0 &&
+                polygonsOverlap(it.points, newTerritory.points)
+    }
     return if (overlap != null) {
         // Fusionar los puntos para que abarque el rango más grande
         val mergedPoints = mergePolygons(overlap.points, newTerritory.points)
@@ -832,11 +1114,17 @@ fun mergeOrCreateTerritory(
             if (it.id == overlap.id && it.ownerId == currentUserId) mergedTerritory else it
         }
 
-        mergedTerritory
+        MergeTerritoryResult(
+            territory = mergedTerritory,
+            wasMerged = true
+        )
     } else {
         // No hay superposición, se crea uno nuevo
         existingTerritories.add(newTerritory)
-        newTerritory
+        MergeTerritoryResult(
+            territory = newTerritory,
+            wasMerged = false
+        )
     }
 }
 // Verifica si dos polígonos se superponen (aproximación simple)
@@ -857,8 +1145,161 @@ fun getBounds(points: List<LatLng>): android.graphics.RectF {
         lats.maxOrNull()?.toFloat() ?: 0f
     )
 }
+fun countRoutePointsInsideBounds(
+    routePoints: List<LatLng>,
+    territoryPoints: List<LatLng>
+): Int {
+    val bounds = getBounds(territoryPoints)
 
+    return routePoints.count { point ->
+        point.longitude.toFloat() >= bounds.left &&
+                point.longitude.toFloat() <= bounds.right &&
+                point.latitude.toFloat() >= bounds.top &&
+                point.latitude.toFloat() <= bounds.bottom
+    }
+}
+fun isClosedRoute(routePoints: List<LatLng>): Boolean {
+    val start = routePoints.firstOrNull()
+    val end = routePoints.lastOrNull()
+
+    if (start == null || end == null) return false
+
+    return distanceInMeters(start, end) <= CLOSED_ROUTE_MAX_DISTANCE_METERS
+}
+fun calculateRouteAttackDamage(
+    elapsedTimeSeconds: Int,
+    totalDistanceMeters: Float,
+    attackType: AttackType,
+    territoryType: SettlementType
+): Int {
+    val baseDamage = when (attackType) {
+        AttackType.FULL_SURROUND -> 25
+        AttackType.PARTIAL -> 10
+    }
+
+    val distanceBonus = (totalDistanceMeters / 500f).toInt() * 5
+    val timeBonus = (elapsedTimeSeconds / 300) * 5
+
+    val territoryPenalty = when (territoryType) {
+        SettlementType.CASTLE -> -5
+        SettlementType.VILLAGE -> 0
+    }
+
+    val rawDamage = baseDamage + distanceBonus + timeBonus + territoryPenalty
+
+    return when (territoryType) {
+        SettlementType.CASTLE -> rawDamage.coerceIn(5, 25)
+        SettlementType.VILLAGE -> rawDamage.coerceIn(5, 45)
+    }
+}
 // Fusiona dos polígonos (simplemente concatena y elimina duplicados)
 fun mergePolygons(p1: List<LatLng>, p2: List<LatLng>): List<LatLng> {
-    return (p1 + p2).distinctBy { it.latitude to it.longitude }
+    val points = (p1 + p2)
+        .distinctBy { it.latitude to it.longitude }
+
+    val center = calculateCenter(points)
+
+    return points.sortedBy { point ->
+        kotlin.math.atan2(
+            point.latitude - center.latitude,
+            point.longitude - center.longitude
+        )
+    }
+}
+
+enum class AttackType {
+    PARTIAL,
+    FULL_SURROUND
+}
+
+data class TerritoryAttackResult(
+    val territory: Territory,
+    val attackType: AttackType
+)
+
+fun findEnemyTerritoryAffectedByRoute(
+    routePoints: List<LatLng>,
+    territories: List<Territory>,
+    currentUserId: String
+): TerritoryAttackResult? {
+    if (routePoints.size < MIN_ROUTE_POINTS_FOR_ATTACK) return null
+
+    val enemyTerritories = territories.filter {
+        it.ownerId.isNotBlank() &&
+                it.ownerId != currentUserId &&
+                it.control > 0 &&
+                it.points.size >= 3
+    }
+
+    return enemyTerritories.mapNotNull { territory ->
+        val routeBounds = getBounds(routePoints)
+        val territoryBounds = getBounds(territory.points)
+
+        val routeContainsTerritory =
+            routeBounds.left <= territoryBounds.left &&
+                    routeBounds.top <= territoryBounds.top &&
+                    routeBounds.right >= territoryBounds.right &&
+                    routeBounds.bottom >= territoryBounds.bottom
+
+        val territoryPointsInsideRouteBounds =
+            territory.points.count { point ->
+                point.longitude.toFloat() >= routeBounds.left &&
+                        point.longitude.toFloat() <= routeBounds.right &&
+                        point.latitude.toFloat() >= routeBounds.top &&
+                        point.latitude.toFloat() <= routeBounds.bottom
+            }
+
+        val enoughTerritoryInside =
+            territoryPointsInsideRouteBounds >= territory.points.size * 0.8
+
+        val isClosed = isClosedRoute(routePoints)
+        val overlaps = polygonsOverlap(routePoints, territory.points)
+        val pointsInside = countRoutePointsInsideBounds(routePoints, territory.points)
+        val enoughRouteInside = pointsInside >= MIN_ROUTE_POINTS_INSIDE_TERRITORY
+        when {
+            routeContainsTerritory && enoughTerritoryInside && isClosed -> {
+                TerritoryAttackResult(
+                    territory = territory,
+                    attackType = AttackType.FULL_SURROUND
+                )
+            }
+
+            overlaps && enoughRouteInside -> {
+                TerritoryAttackResult(
+                    territory = territory,
+                    attackType = AttackType.PARTIAL
+                )
+            }
+
+            else -> null
+        }
+    }.maxByOrNull { result ->
+        countRoutePointsInsideBounds(
+            routePoints = routePoints,
+            territoryPoints = result.territory.points
+        )
+    }
+}
+fun territoryStatusText(control: Int): String {
+    return when {
+        control == 0 -> "Reclamable"
+        control in 1..20 -> "Muy débil"
+        control in 21..60 -> "En disputa"
+        else -> "Fuerte"
+    }
+}
+fun routeExpandsOwnTerritory(
+    routePoints: List<LatLng>,
+    ownTerritory: Territory
+): Boolean {
+    val routeBounds = getBounds(routePoints)
+    val territoryBounds = getBounds(ownTerritory.points)
+
+    val routeGoesOutsideTerritory =
+        routeBounds.left < territoryBounds.left ||
+                routeBounds.top < territoryBounds.top ||
+                routeBounds.right > territoryBounds.right ||
+                routeBounds.bottom > territoryBounds.bottom
+
+    return routeGoesOutsideTerritory
 }

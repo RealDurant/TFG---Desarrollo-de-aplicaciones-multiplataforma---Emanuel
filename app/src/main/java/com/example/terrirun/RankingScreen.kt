@@ -37,6 +37,7 @@ fun RankingScreen(
     onCenterMap: (Territory) -> Unit
 ) {
     val ranking = uiState.territories
+        .filter { it.control > 0 }
         .groupBy { it.ownerId }
         .map { (ownerId, playerTerritories) ->
             PlayerRanking(

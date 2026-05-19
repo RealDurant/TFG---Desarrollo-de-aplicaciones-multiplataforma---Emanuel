@@ -39,7 +39,10 @@ fun MainGameScreen(
     var language by remember { mutableStateOf(settingsManager.getLanguage()) }
     var selectedPlayer by remember { mutableStateOf<PlayerRanking?>(null) }
     LaunchedEffect(uiState.playerProfile) {
-        if (uiState.playerProfile.name.isNotBlank()) {
+        if (
+            uiState.playerProfile.name.isNotBlank() &&
+            !settingsManager.hasSeenNotificationDialog()
+        ) {
             showNotificationDialog = true
         }
     }
@@ -188,24 +191,34 @@ fun MainGameScreen(
                     Text(appText("activate_notifications_text", language))
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        val uid = gameViewModel.getCurrentUserId()
-                        if (uid != null) {
-                            UserRepository().updateNotifications(uid, true) { _, _ -> }
+                    TextButton(
+                        onClick = {
+                            settingsManager.setNotificationDialogSeen(true)
+
+                            val uid = gameViewModel.getCurrentUserId()
+                            if (uid != null) {
+                                UserRepository().updateNotifications(uid, true) { _, _ -> }
+                            }
+
+                            showNotificationDialog = false
                         }
-                        showNotificationDialog = false
-                    }) {
+                    ) {
                         Text(appText("yes", language))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
-                        val uid = gameViewModel.getCurrentUserId()
-                        if (uid != null) {
-                            UserRepository().updateNotifications(uid, false) { _, _ -> }
+                    TextButton(
+                        onClick = {
+                            settingsManager.setNotificationDialogSeen(true)
+
+                            val uid = gameViewModel.getCurrentUserId()
+                            if (uid != null) {
+                                UserRepository().updateNotifications(uid, false) { _, _ -> }
+                            }
+
+                            showNotificationDialog = false
                         }
-                        showNotificationDialog = false
-                    }) {
+                    ) {
                         Text(appText("no", language))
                     }
                 }
